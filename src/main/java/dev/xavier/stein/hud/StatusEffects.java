@@ -8,27 +8,27 @@
 
 package dev.xavier.stein.hud;
 
-import dev.xavier.stein.loader.api.Option;
-import java.util.ArrayList;
-import java.util.List;
 import dev.xavier.stein.loader.api.Effects;
 import dev.xavier.stein.loader.api.Entities;
+import dev.xavier.stein.loader.api.Option;
 import dev.xavier.stein.loader.api.Render;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * Efeitos ativos — as funcoes do StatusEffectHUD: icone, nome com nivel, duracao,
- * caixa de fundo como a do inventario, cores do nome e da duracao, icone e
- * duracao piscando nos ultimos segundos, e tirar a lista do inventario.
+ * Active effects (what StatusEffectHUD did): icon, name with level, duration, name and duration
+ * colors, icon and duration blinking in the last seconds, and taking the list out of the inventory.
  */
 final class StatusEffects extends HudElement {
-
-    /** Caixa do inventario: 140 x 32 em (0, 166) da textura, uma a cada 33 px. */
 
     private final HudConfig.Effects c;
     private final List<Effects.Effect> list = new ArrayList<>();
     private List<Effects.Effect> preview;
-    /** O exemplo do editor nao corre o tempo: o piscar dele segue o relogio. */
+
+    /** The editor's sample does not run the clock: its blinking follows the wall clock. */
     private boolean showingPreview;
+
     private int rowH;
 
     StatusEffects(HudConfig.Effects c, SteinHud mod) {
@@ -66,9 +66,9 @@ final class StatusEffects extends HudElement {
     private List<Effects.Effect> preview() {
         if (preview == null) {
             preview = new ArrayList<>();
-            preview.add(new Effects.Effect(1, 1, 90 * 20, false));   // Velocidade II, 1:30
-            preview.add(new Effects.Effect(5, 0, 8 * 20, false));    // Forca, 0:08 (piscando)
-            preview.add(new Effects.Effect(12, 0, 180 * 20, false)); // Resistencia ao fogo, 3:00
+            preview.add(new Effects.Effect(1, 1, 90 * 20, false)); // Speed II, 1:30
+            preview.add(new Effects.Effect(5, 0, 8 * 20, false)); // Strength, 0:08 (blinking)
+            preview.add(new Effects.Effect(12, 0, 180 * 20, false)); // Fire Resistance, 3:00
         }
         return preview;
     }
@@ -80,49 +80,70 @@ final class StatusEffects extends HudElement {
             int y = i * rowH;
             int left = e.duration;
             boolean ending = c.blinkSeconds >= 0 && !e.permanent && left <= c.blinkSeconds * 20;
-            // Meio segundo aceso, meio apagado (10 ticks).
-            boolean off = ending && (showingPreview ? System.currentTimeMillis() / 500L % 2 == 0 : (left / 10) % 2 == 0);
+            // Half a second on, half off (10 ticks).
+            boolean off =
+                    ending
+                            && (showingPreview
+                                    ? System.currentTimeMillis() / 500L % 2 == 0
+                                    : (left / 10) % 2 == 0);
             String name = c.effectName ? Option.fmt(c.nameColor) + Effects.name(e) : null;
             String duration = Option.fmt(c.durationColor) + Effects.durationText(e);
 
             int iconX = alignRight ? w - 18 : 0;
-            icon(e, iconX, y, c.iconBlink && off);
+            if (!(c.iconBlink && off)) {
+                Render.effectIcon(e.id, iconX, y);
+            }
             int textLine = name != null ? y + 1 : y + 5;
             if (name != null) {
-                Render.text(name, alignRight ? w - 20 - Render.textWidth(name) : 20, textLine, 0xFFFFFF, true);
+                Render.text(
+                        name,
+                        alignRight ? w - 20 - Render.textWidth(name) : 20,
+                        textLine,
+                        0xFFFFFF,
+                        true);
             }
             if (!off) {
                 int dy = name != null ? y + 10 : textLine;
-                Render.text(duration, alignRight ? w - 20 - Render.textWidth(duration) : 20, dy, 0xFFFFFF, true);
+                Render.text(
+                        duration,
+                        alignRight ? w - 20 - Render.textWidth(duration) : 20,
+                        dy,
+                        0xFFFFFF,
+                        true);
             }
-        }
-    }
-
-    private static void icon(Effects.Effect e, int x, int y, boolean hidden) {
-        if (!hidden) {
-            Render.effectIcon(e.id, x, y);
         }
     }
 
     @Override
     void addOptions(List<Option> out) {
-        out.add(Option.toggle(T.tr("effects.hideInventory"), () -> c.hideInventoryList, v -> c.hideInventoryList = v));
+        out.add(
+                Option.toggle(
+                        T.tr("effects.hideInventory"),
+                        () -> c.hideInventoryList,
+                        v -> c.hideInventoryList = v));
         out.add(Option.toggle(T.tr("effects.name"), () -> c.effectName, v -> c.effectName = v));
         out.add(Option.color(T.tr("effects.nameColor"), () -> c.nameColor, v -> c.nameColor = v));
-        out.add(Option.color(T.tr("effects.durationColor"), () -> c.durationColor, v -> c.durationColor = v));
+        out.add(
+                Option.color(
+                        T.tr("effects.durationColor"),
+                        () -> c.durationColor,
+                        v -> c.durationColor = v));
         int[] seconds = {-1, 5, 10, 15, 20, 30, 60};
         String[] names = {T.tr("off"), "5 s", "10 s", "15 s", "20 s", "30 s", "60 s"};
-        out.add(Option.cycle(T.tr("effects.blink"), names,
-                () -> {
-                    for (int i = 0; i < seconds.length; i++) {
-                        if (seconds[i] == c.blinkSeconds) {
-                            return i;
-                        }
-                    }
-                    return 2;
-                },
-                i -> c.blinkSeconds = seconds[i]));
-        // O icone so pisca no fim do efeito, entao vem depois do tempo de piscar.
+        out.add(
+                Option.cycle(
+                        T.tr("effects.blink"),
+                        names,
+                        () -> {
+                            for (int i = 0; i < seconds.length; i++) {
+                                if (seconds[i] == c.blinkSeconds) {
+                                    return i;
+                                }
+                            }
+                            return 2;
+                        },
+                        i -> c.blinkSeconds = seconds[i]));
+        // The icon only blinks at the end of the effect, so it comes after the blinking time.
         out.add(Option.toggle(T.tr("effects.iconBlink"), () -> c.iconBlink, v -> c.iconBlink = v));
     }
 }

@@ -8,6 +8,12 @@
 
 package dev.xavier.stein.hud;
 
+import static java.lang.foreign.ValueLayout.ADDRESS;
+import static java.lang.foreign.ValueLayout.JAVA_INT;
+import static java.lang.foreign.ValueLayout.JAVA_LONG;
+
+import dev.xavier.stein.loader.api.Log;
+
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
@@ -16,44 +22,51 @@ import java.lang.foreign.SymbolLookup;
 import java.lang.invoke.MethodHandle;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static java.lang.foreign.ValueLayout.ADDRESS;
-import static java.lang.foreign.ValueLayout.JAVA_INT;
-import static java.lang.foreign.ValueLayout.JAVA_LONG;
-
 /**
- * Uso de CPU e GPU do sistema, amostrados uma vez por segundo numa thread propria (ler os contadores do Windows leva
- * alguns milissegundos, que nao podem sair do quadro), e a memoria do sistema. A thread so roda enquanto algum
- * elemento pede os valores: 5 s sem pedido e ela para.
+ * System CPU and GPU usage, sampled once per second on a thread of its own (reading the Windows
+ * counters takes a few milliseconds, which must not come out of the frame), and the system's
+ * memory. The thread only runs while an element asks for the values: 5 s without a request and it
+ * stops.
  */
 final class Sensors {
 
     private static final long IDLE_NS = 5_000_000_000L;
-    /** MEMORYSTATUSEX: dwLength, dwMemoryLoad, ullTotalPhys (8), ullAvailPhys (16) e mais cinco contadores. */
-    private static final long MEMORY_STATUS_SIZE = 64;
-    private static final AtomicBoolean RUNNING = new AtomicBoolean();
-    private static volatile long wanted;
-    private static volatile double cpu = -1;
-    private static volatile double gpu = -1;
-    private static MethodHandle memoryStatus;
-    private static boolean noMemoryStatus;
 
-    private Sensors() {
+    /**
+     * MEMORYSTATUSEX: dwLength, dwMemoryLoad, ullTotalPhys (8), ullAvailPhys (16) and five more.
+     */
+    private static final long MEMORY_STATUS_SIZE = 64;
+
+    private final Log log;
+    private final AtomicBoolean running = new AtomicBoolean();
+    private volatile long wanted;
+    private volatile double cpu = -1;
+    private volatile double gpu = -1;
+    private MethodHandle memoryStatus;
+    private boolean noMemoryStatus;
+
+    Sensors(Log log) {
+        this.log = log;
     }
 
-    /** Uso do processador (todo o sistema), 0-100; -1 enquanto nao ha amostra ou sem os contadores do Windows. */
-    static double cpu() {
+    /**
+     * Processor usage (the whole system), 0-100; -1 until a sample or without the Windows counters.
+     */
+    double cpu() {
         want();
         return cpu;
     }
 
-    /** Uso da placa de video, 0-100; -1 enquanto nao ha amostra ou sem os contadores do Windows. */
-    static double gpu() {
+    /** Graphics card usage, 0-100; -1 until a sample or without the Windows counters. */
+    double gpu() {
         want();
         return gpu;
     }
 
-    /** Memoria do sistema em uso e total, em bytes (GlobalMemoryStatusEx do Windows); null sem a informacao. */
-    static long[] systemMemory() {
+    /**
+     * System memory in use and total, in bytes (Windows' GlobalMemoryStatusEx); null without it.
+     */
+    long[] systemMemory() {
         MethodHandle h = memoryStatus();
         if (h == null) {
             return null;
@@ -72,12 +85,16 @@ final class Sensors {
         }
     }
 
-    private static MethodHandle memoryStatus() {
+    private MethodHandle memoryStatus() {
         if (memoryStatus == null && !noMemoryStatus) {
             try {
-                memoryStatus = Linker.nativeLinker().downcallHandle(
-                        SymbolLookup.libraryLookup("kernel32.dll", Arena.global()).find("GlobalMemoryStatusEx").orElseThrow(),
-                        FunctionDescriptor.of(JAVA_INT, ADDRESS));
+                memoryStatus =
+                        Linker.nativeLinker()
+                                .downcallHandle(
+                                        SymbolLookup.libraryLookup("kernel32.dll", Arena.global())
+                                                .find("GlobalMemoryStatusEx")
+                                                .orElseThrow(),
+                                        FunctionDescriptor.of(JAVA_INT, ADDRESS));
             } catch (Throwable t) {
                 noMemoryStatus = true;
             }
@@ -85,18 +102,18 @@ final class Sensors {
         return memoryStatus;
     }
 
-    private static void want() {
+    private void want() {
         wanted = System.nanoTime();
-        if (RUNNING.compareAndSet(false, true)) {
-            Thread t = new Thread(Sensors::run, "Stein HUD: sensores");
+        if (running.compareAndSet(false, true)) {
+            Thread t = new Thread(this::run, "Stein HUD: sensors");
             t.setDaemon(true);
             t.setPriority(Thread.MIN_PRIORITY);
             t.start();
         }
     }
 
-    private static void run() {
-        Pdh pdh = Pdh.open();
+    private void run() {
+        Pdh pdh = Pdh.open(log);
         try {
             while (pdh != null && System.nanoTime() - wanted < IDLE_NS) {
                 try {
@@ -104,7 +121,7 @@ final class Sensors {
                     cpu = pdh.cpu();
                     gpu = pdh.gpu();
                 } catch (Throwable t) {
-                    System.out.println("[mods] HUD: contadores do Windows falharam (" + t + ")");
+                    log.warn("Windows counters failed (" + t + ")");
                     break;
                 }
                 Thread.sleep(1000);
@@ -117,7 +134,7 @@ final class Sensors {
             }
             cpu = -1;
             gpu = -1;
-            RUNNING.set(false);
+            running.set(false);
         }
     }
 }

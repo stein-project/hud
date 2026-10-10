@@ -8,27 +8,34 @@
 
 package dev.xavier.stein.hud;
 
-import java.util.List;
-import dev.xavier.stein.loader.api.Option;
 import dev.xavier.stein.loader.api.HudPlacement;
+import dev.xavier.stein.loader.api.Log;
+import dev.xavier.stein.loader.api.Option;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.List;
 
 /**
- * Um bloco do Stein HUD na grade do HUD do Stein Loader: o Loader guarda o lugar, a escala e se esta ligado, e abre o
- * editor; aqui ficam o conteudo e as opcoes de cada elemento.
+ * A block of the HUD on the Stein Loader's HUD grid: the Loader keeps the place, the scale and
+ * whether it is on, and opens the editor; the content and each element's options live here.
  */
 abstract class HudElement implements dev.xavier.stein.loader.api.HudElement {
 
     private final String id;
     private final String key;
+
     /**
-     * Opcoes do elemento. O lugar (ancora, deslocamento, escala) e o ligado ficaram no Loader; os campos dele aqui
-     * sao os da versao antiga, lidos uma vez para o Loader nao perder o lugar que o jogador ja tinha.
+     * The element's options. Place (anchor, offset, scale) and enabled moved to the Loader; its
+     * fields here are the old version's, read once so the Loader keeps the place the player had.
      */
     final HudConfig.Placement cfg;
+
     private final SteinHud mod;
 
-    /** Tamanho do conteudo, sem escala, calculado em {@link #layout}. */
+    /** Content size, without scale, computed in {@link #layout}. */
     int w;
+
     int h;
 
     HudElement(String key, HudConfig.Placement cfg, SteinHud mod) {
@@ -38,9 +45,10 @@ abstract class HudElement implements dev.xavier.stein.loader.api.HudElement {
         this.mod = mod;
     }
 
-    // layout(preview, partialTicks), da API: monta o conteudo e define w/h (preview: no editor, com exemplo se faltar dado).
+    // layout(preview, partialTicks), from the API: builds the content and sets w/h (preview: in the
+    // editor, with a sample where data is missing).
 
-    /** Desenha em (0, 0), ja transladado e com escala. */
+    /** Draws at (0, 0), already translated and scaled. */
     abstract void draw(boolean alignRight);
 
     @Override
@@ -48,8 +56,12 @@ abstract class HudElement implements dev.xavier.stein.loader.api.HudElement {
         draw(alignRight);
     }
 
-    /** Opcoes proprias do elemento, na tela de opcoes. */
+    /** The element's own options, on the options screen. */
     abstract void addOptions(List<Option> out);
+
+    final Log log() {
+        return mod.log();
+    }
 
     @Override
     public final String id() {
@@ -58,7 +70,7 @@ abstract class HudElement implements dev.xavier.stein.loader.api.HudElement {
 
     @Override
     public final String name() {
-        return T.tr(key);   // no idioma de agora: trocar de idioma no jogo troca o nome
+        return T.tr(key); // in the current language: switching it in game switches the name
     }
 
     @Override
@@ -73,14 +85,15 @@ abstract class HudElement implements dev.xavier.stein.loader.api.HudElement {
 
     @Override
     public final HudPlacement defaultPlacement() {
-        // O lugar de fabrica e o do resetPosition, numa copia: a configuracao do jogador fica como esta.
+        // The factory place is resetPosition's, on a copy: the player's configuration stays as is.
         HudConfig.Placement p = cfg.fresh();
         return new HudPlacement(p.anchorX, p.anchorY, p.x, p.y, p.scale, p.enabled, p.showInChat);
     }
 
     @Override
     public final HudPlacement savedPlacement() {
-        return new HudPlacement(cfg.anchorX, cfg.anchorY, cfg.x, cfg.y, cfg.scale, cfg.enabled, cfg.showInChat);
+        return new HudPlacement(
+                cfg.anchorX, cfg.anchorY, cfg.x, cfg.y, cfg.scale, cfg.enabled, cfg.showInChat);
     }
 
     @Override
@@ -89,22 +102,23 @@ abstract class HudElement implements dev.xavier.stein.loader.api.HudElement {
     }
 
     /**
-     * As opcoes do elemento de volta ao padrao: os campos da configuracao dele (a subclasse de Placement) copiados de uma
-     * nova. Lugar, escala e ligado sao do Loader, que restaura os dele; os campos de Placement ficam como estao.
+     * The element's options back to the defaults: the fields of its configuration (the Placement
+     * subclass) copied from a new one. Place, scale and enabled belong to the Loader, which
+     * restores its own; the Placement fields stay as they are.
      */
     @Override
     public final void restoreOptions() {
-        HudConfig.Placement fresh = HudConfig.defaultFor(cfg);
-        for (java.lang.reflect.Field f : cfg.getClass().getDeclaredFields()) {
+        HudConfig.Placement fresh = HudConfigFile.defaultFor(cfg);
+        for (Field f : cfg.getClass().getDeclaredFields()) {
             int m = f.getModifiers();
-            if (java.lang.reflect.Modifier.isStatic(m) || java.lang.reflect.Modifier.isFinal(m)) {
+            if (Modifier.isStatic(m) || Modifier.isFinal(m)) {
                 continue;
             }
             try {
                 f.setAccessible(true);
                 f.set(cfg, f.get(fresh));
             } catch (ReflectiveOperationException e) {
-                System.out.println("[hud] " + id + ": nao restaurou " + f.getName() + ": " + e);
+                log().warn(id + ": could not restore " + f.getName() + ": " + e);
             }
         }
     }

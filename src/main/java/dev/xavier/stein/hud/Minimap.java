@@ -8,42 +8,47 @@
 
 package dev.xavier.stein.hud;
 
-import dev.xavier.stein.loader.api.Option;
-import java.util.ArrayList;
-import java.util.List;
 import dev.xavier.stein.loader.api.Entities;
+import dev.xavier.stein.loader.api.Option;
 import dev.xavier.stein.loader.api.Render;
 import dev.xavier.stein.loader.api.Terrain;
 
+import java.util.List;
+
 /**
- * Minimapa em tres modos: detalhado (o terreno como no Reis Minimap: cor das texturas, relevo, agua rasa, cavernas no
- * Nether e embaixo da terra), simples (a cor de mapa do jogo e relevo forte — o contorno das coisas sem tanto detalhe)
- * e radar (sem mapa, so os marcadores). Quadrado ou redondo, girando com o jogador ou com o norte para cima. Mostra
- * jogadores como ponto (com o Stein Combat, inimigos em vermelho, aliados na cor do Combat e o meu cla em verde),
- * monstros, animais e gaiolas (spawners); o que esta bem acima ou abaixo aparece apagado.
+ * A minimap in three modes: detailed (the terrain like Rei's Minimap: texture colors, relief,
+ * shallow water, caves in the Nether and underground), simple (the game's map colors and strong
+ * relief: the outline of things without as much detail) and radar (no map, only the markers).
+ * Square or round, turning with the player or with north up. Shows players as dots (with relation
+ * colors), monsters, animals and spawners ({@link MinimapMarkers}); what is far above or below
+ * shows faded.
  */
 final class Minimap extends HudElement {
 
     static final int[] SIZES = {64, 80, 96, 128};
     private static final String[] SIZE_NAMES = {"64", "80", "96", "128"};
-    /** Blocos por pixel. */
+
+    /** Blocks per pixel. */
     static final float[] ZOOMS = {0.5F, 1.0F, 2.0F, 4.0F};
-    private static final String[] ZOOM_NAMES = {"minimap.zoom.near", "minimap.zoom.normal", "minimap.zoom.far", "minimap.zoom.veryFar"};
+
+    private static final String[] ZOOM_NAMES = {
+        "minimap.zoom.near", "minimap.zoom.normal", "minimap.zoom.far", "minimap.zoom.veryFar"
+    };
     private static final String[] MODES = {"minimap.detailed", "minimap.simple", "minimap.radar"};
     private static final String[] SHAPES = {"minimap.square", "minimap.round"};
-    private static final String[] ENTITIES = {"minimap.all", "minimap.monsters", "minimap.animals", "minimap.none"};
+    private static final String[] ENTITIES = {
+        "minimap.all", "minimap.monsters", "minimap.animals", "minimap.none"
+    };
     private static final int CIRCLE = 48;
-    private static final int HOSTILE = 0xFFAA00;
-    private static final int PASSIVE = 0xD0D0D0;
-    private static final int ENEMY = 0xFF5555;
-    private static final int CLAN = 0x55FF55;
-    private static final int NEUTRAL = 0xFFFFFF;
 
     private final HudConfig.Minimap c;
-    private final MapTexture map = new MapTexture();
-    private final List<Object> players = new ArrayList<>();
-    /** Pontos de um leque (o fundo redondo, o mapa, a seta), reaproveitados de um quadro para o outro. */
+    private final MapTexture map;
+    private final MinimapView view = new MinimapView();
+    private final MinimapMarkers markers;
+
+    /** A fan's points (the round background, the map), reused from one frame to the next. */
     private final float[] fx = new float[CIRCLE + 2];
+
     private final float[] fy = new float[CIRCLE + 2];
     private final float[] fu = new float[CIRCLE + 2];
     private final float[] fv = new float[CIRCLE + 2];
@@ -51,30 +56,26 @@ final class Minimap extends HudElement {
     private Object self;
     private int layer = -1;
     private float partial;
-    private double px;
-    private double py;
-    private double pz;
-    private double cos;
-    private double sin;
-    private float bpp;
     private int size;
     private String coords;
-    /** O texto das coordenadas do jogador e o bloco de que ele foi montado. */
+
+    /** The player's coordinates text and the block it was built from. */
     private String coordsBuilt;
+
     private int coordsX;
     private int coordsY;
     private int coordsZ;
-    private float sx;
-    private float sy;
 
     Minimap(HudConfig.Minimap c, SteinHud mod) {
         super("minimap", c, mod);
         this.c = c;
+        this.map = new MapTexture(mod.log());
+        this.markers = new MinimapMarkers(c, view, mod.log());
     }
 
-    /** Pacote de texturas novo: as cores e o mapa saem de novo. */
+    /** A new resource pack: colors and the map come out again. */
     void resourcesReloaded() {
-        map.reset();   // as cores de bloco o Loader refaz sozinho
+        map.reset(); // the Loader redoes the block colors by itself
     }
 
     private int sizeIndex() {
@@ -104,7 +105,9 @@ final class Minimap extends HudElement {
             return false;
         }
         size = SIZES[sizeIndex()];
-        bpp = ZOOMS[zoomIndex()];
+        view.bpp = ZOOMS[zoomIndex()];
+        view.rotate = c.rotate;
+        view.round = c.shape == 1;
         partial = partialTicks;
         w = size;
         h = size + (c.coords ? 12 : 0);
@@ -112,16 +115,16 @@ final class Minimap extends HudElement {
             coords = "0, 64, 0";
             return true;
         }
-        px = Entities.x(self, partialTicks);
-        py = Entities.y(self, partialTicks);
-        pz = Entities.z(self, partialTicks);
+        view.px = Entities.x(self, partialTicks);
+        view.py = Entities.y(self, partialTicks);
+        view.pz = Entities.z(self, partialTicks);
         double yaw = Math.toRadians(Entities.yaw(self, partialTicks));
-        cos = Math.cos(yaw);
-        sin = Math.sin(yaw);
-        // O texto so muda quando o bloco muda: sem montar a mesma string a cada quadro.
-        int bx = floor(px);
-        int by = floor(py);
-        int bz = floor(pz);
+        view.cos = Math.cos(yaw);
+        view.sin = Math.sin(yaw);
+        // The text only changes when the block changes: no building the same string every frame.
+        int bx = floor(view.px);
+        int by = floor(view.py);
+        int bz = floor(view.pz);
         if (coordsBuilt == null || bx != coordsX || by != coordsY || bz != coordsZ) {
             coordsX = bx;
             coordsY = by;
@@ -136,34 +139,21 @@ final class Minimap extends HudElement {
     }
 
     private void updateMap() {
+        double px = view.px;
+        double py = view.py;
+        double pz = view.pz;
         int want = -1;
-        if (c.caves && (!Terrain.hasSky() || Terrain.skyLight(floor(px), floor(py + 1), floor(pz)) < 4)) {
+        if (c.caves
+                && (!Terrain.hasSky()
+                        || Terrain.skyLight(floor(px), floor(py + 1), floor(pz)) < 4)) {
             int feet = floor(py);
-            want = layer >= 0 && Math.abs(feet - layer) < 2 ? layer : feet; // meio bloco de folga: sem reler a cada degrau
+            // Half a block of slack: no re-reading on every step.
+            want = layer >= 0 && Math.abs(feet - layer) < 2 ? layer : feet;
         }
         layer = want;
-        double reach = size / 2.0 * bpp * (c.rotate && c.shape == 0 ? 1.42 : 1.0);
+        double reach = size / 2.0 * view.bpp * (c.rotate && c.shape == 0 ? 1.42 : 1.0);
         int r = Math.min(30, (int) Math.ceil(reach / 16.0) + 1);
         map.update(world, floor(px) >> 4, floor(pz) >> 4, r, layer, c.mode == 1);
-    }
-
-    /** Deslocamento no mundo (blocos) -> na tela (pixels a partir do centro), em sx/sy. */
-    private void toScreen(double dx, double dz) {
-        double x = dx / bpp;
-        double z = dz / bpp;
-        if (!c.rotate) {
-            sx = (float) x;
-            sy = (float) z;
-        } else {
-            // A frente do jogador para cima: yaw 0 olha para o sul (+z).
-            sx = (float) (-cos * x - sin * z);
-            sy = (float) (sin * x - cos * z);
-        }
-    }
-
-    private boolean inside(float half) {
-        float m = half - 2;
-        return c.shape == 1 ? sx * sx + sy * sy <= m * m : Math.abs(sx) <= m && Math.abs(sy) <= m;
     }
 
     @Override
@@ -179,21 +169,19 @@ final class Minimap extends HudElement {
         }
         if (live) {
             if (c.spawners) {
-                spawners(half);
+                markers.spawners(half);
             }
-            entities(half);
+            markers.entities(half, self, partial);
         }
-        arrow(half);
-        north(half);
+        markers.arrow(half, self != null);
+        markers.north(half, self != null);
         if (c.coords) {
             int tw = Render.textWidth(coords);
             Render.text(coords, half - tw / 2.0F, size + 3, 0xFFFFFF, true);
         }
     }
 
-    // ---- fundo e mapa ----
-
-    /** Quadrado ou circulo (conforme o formato) de raio r em volta do centro, numa cor so. */
+    /** A square or circle (by the shape option) of radius r around the centre, in one color. */
     private void shape(float half, float r, int argb) {
         if (c.shape == 1) {
             fx[0] = half;
@@ -210,7 +198,7 @@ final class Minimap extends HudElement {
         }
     }
 
-    /** Os quatro cantos do quadrado de raio r, na ordem em que o jogo desenha de frente. */
+    /** The square's four corners of radius r, in the winding the game draws front-facing. */
     private void corners(float half, float r) {
         fx[0] = half - r;
         fy[0] = half + r;
@@ -223,9 +211,10 @@ final class Minimap extends HudElement {
     }
 
     private void drawMap(float half) {
-        // Coordenadas de textura perto de zero (a textura se repete): longe da origem, float perderia o bloco.
-        double baseX = Math.floor(px / MapTexture.SIZE) * MapTexture.SIZE;
-        double baseZ = Math.floor(pz / MapTexture.SIZE) * MapTexture.SIZE;
+        // Texture coordinates near zero (the texture repeats): far from the origin, a float would
+        // lose the block.
+        double baseX = Math.floor(view.px / MapTexture.SIZE) * MapTexture.SIZE;
+        double baseZ = Math.floor(view.pz / MapTexture.SIZE) * MapTexture.SIZE;
         int n;
         if (c.shape == 1) {
             mapVertex(0, half, 0, 0, baseX, baseZ);
@@ -244,172 +233,21 @@ final class Minimap extends HudElement {
         map.texture().drawFan(fx, fy, fu, fv, n, 0xFFFFFFFF);
     }
 
-    /** Ponto i em (centro + ox, centro + oy), com a coordenada de textura do bloco que cai ali. */
+    /** Point i at (centre + ox, centre + oy), with the texture coordinate of the block there. */
     private void mapVertex(int i, float half, double ox, double oy, double baseX, double baseZ) {
         double dx;
         double dz;
         if (!c.rotate) {
-            dx = ox * bpp;
-            dz = oy * bpp;
+            dx = ox * view.bpp;
+            dz = oy * view.bpp;
         } else {
-            dx = (-ox * cos + oy * sin) * bpp;
-            dz = (-ox * sin - oy * cos) * bpp;
+            dx = (-ox * view.cos + oy * view.sin) * view.bpp;
+            dz = (-ox * view.sin - oy * view.cos) * view.bpp;
         }
         fx[i] = (float) (half + ox);
         fy[i] = (float) (half + oy);
-        fu[i] = (float) ((px - baseX + dx) / MapTexture.SIZE);
-        fv[i] = (float) ((pz - baseZ + dz) / MapTexture.SIZE);
-    }
-
-    // ---- marcadores ----
-
-    private void spawners(float half) {
-        Terrain.forEachSpawner((bx, by, bz) -> {
-            toScreen(bx + 0.5 - px, bz + 0.5 - pz);
-            if (!inside(half)) {
-                return;
-            }
-            int x = Math.round(half + sx);
-            int y = Math.round(half + sy);
-            int a = fade(by + 0.5);
-            Render.rect(x - 3, y - 3, 6, 6, a << 24);
-            Render.rect(x - 2, y - 2, 4, 4, a << 24 | 0x9B3FD0);
-            Render.rect(x - 1, y - 2, 1, 4, a << 24 | 0x2A1438); // grades da gaiola
-            Render.rect(x + 1, y - 2, 1, 4, a << 24 | 0x2A1438);
-        });
-    }
-
-    /** Alfa pela diferenca de altura: o que esta bem acima ou abaixo aparece apagado. */
-    private int fade(double y) {
-        return Math.abs(y - py) > 12 ? 0x70 : 0xFF;
-    }
-
-    /** -Dsteinhud.minimap.debug=true: a cada 2 s, as entidades que o minimapa viu e as que desenhou. */
-    private static final boolean DEBUG = Boolean.getBoolean("steinhud.minimap.debug");
-    private long debugAt;
-
-    private void entities(float half) {
-        players.clear();
-        boolean log = DEBUG && System.nanoTime() - debugAt > 2_000_000_000L;
-        StringBuilder seen = log ? new StringBuilder() : null;
-        int drawn = 0;
-        if (log) {
-            debugAt = System.nanoTime();
-        }
-        for (Object e : Entities.all()) {
-            Entities.Kind kind = Entities.kind(e);
-            if (log && kind != Entities.Kind.PLAYER) {
-                seen.append(Entities.typeName(e)).append(Entities.isInvisible(e) ? "(invisivel)" : "")
-                        .append(kind == Entities.Kind.HOSTILE ? "/monstro" : "").append(' ');
-            }
-            // Primeiro o que nao depende da entidade estar invisivel (tipo e opcoes): o que sai e a ordem sao os mesmos,
-            // sem ler as flags de quem nao seria desenhado de qualquer jeito (item no chao, flecha, tipo desligado) —
-            // depois do mundo inteiro desenhado, essa leitura e uma falta de cache por entidade.
-            int color;
-            if (kind == Entities.Kind.PLAYER) {
-                if (!c.players) {
-                    continue;
-                }
-                color = 0;
-            } else if (kind == Entities.Kind.HOSTILE) {
-                if (c.entities == 2 || c.entities == 3) {
-                    continue;
-                }
-                color = HOSTILE;
-            } else if (kind == Entities.Kind.PASSIVE) {
-                if (c.entities == 1 || c.entities == 3) {
-                    continue;
-                }
-                color = PASSIVE;
-            } else {
-                continue;
-            }
-            if (e == self || Entities.isInvisible(e)) {
-                continue;
-            }
-            if (kind == Entities.Kind.PLAYER) {
-                players.add(e);
-                continue;
-            }
-            if (!place(e, half)) {
-                continue;
-            }
-            int x = Math.round(half + sx);
-            int y = Math.round(half + sy);
-            int a = fade(Entities.y(e, 1));
-            Render.rect(x - 2, y - 2, 4, 4, a << 24);
-            Render.rect(x - 1, y - 1, 2, 2, a << 24 | color);
-            drawn++;
-        }
-        if (log) {
-            System.out.println("[mods] minimapa: " + drawn + " marcador(es) de mob, " + players.size() + " jogador(es); vistas: "
-                    + seen);
-        }
-        // Jogadores por cima de tudo, sempre como ponto (modo de PvP: rosto atrapalharia a leitura).
-        for (Object p : players) {
-            if (!place(p, half)) {
-                continue;
-            }
-            int x = Math.round(half + sx);
-            int y = Math.round(half + sy);
-            int a = fade(Entities.y(p, 1));
-            Render.rect(x - 2, y - 2, 5, 5, a << 24);
-            Render.rect(x - 1, y - 1, 3, 3, a << 24 | playerColor(Entities.name(p)));
-        }
-    }
-
-    /** Posicao interpolada da entidade na tela (sx/sy); false fora do mapa. */
-    private boolean place(Object e, float half) {
-        toScreen(Entities.x(e, partial) - px, Entities.z(e, partial) - pz);
-        return inside(half);
-    }
-
-    /** A cor que o Combat da a este jogador (meu cla, aliado, inimigo ou sem cla); sem a integracao, branco. */
-    private int playerColor(String nick) {
-        return c.combat ? CombatLink.color(nick) : NEUTRAL;
-    }
-
-    // ---- o jogador e o norte ----
-
-    /** Seta do jogador no centro: para cima com o mapa girando; senao, para onde ele olha. */
-    private void arrow(float half) {
-        double phi = c.rotate || self == null ? 0 : Math.atan2(sin, cos) + Math.PI;
-        arrowShape(half, phi, 1.45F, 0xFF000000);
-        arrowShape(half, phi, 1.0F, 0xFFFFFFFF);
-    }
-
-    private void arrowShape(float half, double phi, float k, int argb) {
-        // Ponta, esquerda, entalhe, direita: a ordem de giro que o jogo desenha de frente.
-        float[] xs = {0, -3.5F, 0, 3.5F};
-        float[] ys = {-5, 3.5F, 1.5F, 3.5F};
-        double cp = Math.cos(phi);
-        double sp = Math.sin(phi);
-        for (int i = 0; i < 4; i++) {
-            double x = xs[i] * k;
-            double y = ys[i] * k;
-            fx[i] = (float) (half + x * cp - y * sp);
-            fy[i] = (float) (half + x * sp + y * cp);
-        }
-        Render.fan(fx, fy, 4, argb);
-    }
-
-    private void north(float half) {
-        float nx;
-        float ny;
-        if (c.rotate && self != null) {
-            toScreen(0, -bpp); // um pixel para o norte
-            float len = (float) Math.sqrt(sx * sx + sy * sy);
-            nx = sx / len;
-            ny = sy / len;
-        } else {
-            nx = 0;
-            ny = -1;
-        }
-        float r = half - 5;
-        if (c.shape == 0) {
-            r = r / Math.max(Math.abs(nx), Math.abs(ny)); // na borda do quadrado
-        }
-        Render.text("N", half + nx * r - 2.5F, half + ny * r - 4, 0xFFFFFF, true);
+        fu[i] = (float) ((view.px - baseX + dx) / MapTexture.SIZE);
+        fv[i] = (float) ((view.pz - baseZ + dz) / MapTexture.SIZE);
     }
 
     private static int floor(double v) {
@@ -418,13 +256,35 @@ final class Minimap extends HudElement {
 
     @Override
     void addOptions(List<Option> out) {
-        out.add(Option.cycle(T.tr("minimap.mode"), T.all(MODES), () -> Math.max(0, Math.min(2, c.mode)), i -> c.mode = i));
-        out.add(Option.cycle(T.tr("minimap.shape"), T.all(SHAPES), () -> c.shape == 1 ? 1 : 0, i -> c.shape = i));
-        out.add(Option.cycle(T.tr("minimap.size"), SIZE_NAMES, this::sizeIndex, i -> c.size = SIZES[i]));
-        out.add(Option.cycle(T.tr("minimap.zoom"), T.all(ZOOM_NAMES), this::zoomIndex, i -> c.zoom = ZOOMS[i]));
+        out.add(
+                Option.cycle(
+                        T.tr("minimap.mode"),
+                        T.all(MODES),
+                        () -> Math.max(0, Math.min(2, c.mode)),
+                        i -> c.mode = i));
+        out.add(
+                Option.cycle(
+                        T.tr("minimap.shape"),
+                        T.all(SHAPES),
+                        () -> c.shape == 1 ? 1 : 0,
+                        i -> c.shape = i));
+        out.add(
+                Option.cycle(
+                        T.tr("minimap.size"), SIZE_NAMES, this::sizeIndex, i -> c.size = SIZES[i]));
+        out.add(
+                Option.cycle(
+                        T.tr("minimap.zoom"),
+                        T.all(ZOOM_NAMES),
+                        this::zoomIndex,
+                        i -> c.zoom = ZOOMS[i]));
         out.add(Option.toggle(T.tr("minimap.rotate"), () -> c.rotate, v -> c.rotate = v));
         out.add(Option.toggle(T.tr("minimap.players"), () -> c.players, v -> c.players = v));
-        out.add(Option.cycle(T.tr("minimap.entities"), T.all(ENTITIES), () -> Math.max(0, Math.min(3, c.entities)), i -> c.entities = i));
+        out.add(
+                Option.cycle(
+                        T.tr("minimap.entities"),
+                        T.all(ENTITIES),
+                        () -> Math.max(0, Math.min(3, c.entities)),
+                        i -> c.entities = i));
         out.add(Option.toggle(T.tr("minimap.spawners"), () -> c.spawners, v -> c.spawners = v));
         out.add(Option.toggle(T.tr("minimap.relationColors"), () -> c.combat, v -> c.combat = v));
         out.add(Option.toggle(T.tr("minimap.coords"), () -> c.coords, v -> c.coords = v));

@@ -8,54 +8,67 @@
 
 package dev.xavier.stein.hud;
 
-import java.util.Arrays;
+import dev.xavier.stein.loader.api.Log;
 import dev.xavier.stein.loader.api.Render;
 import dev.xavier.stein.loader.api.Terrain;
 
+import java.util.Arrays;
+import java.util.Locale;
+
 /**
- * O terreno do minimapa numa textura de 1024x1024 pixels, um por bloco, que se repete (GL_REPEAT): o bloco (x, z) fica
- * no pixel (x mod 1024, z mod 1024), entao andar nao move nada — so os chunks que entram no alcance sao lidos, os mais
- * perto primeiro e poucos por vez, e um ja lido e relido de tempos em tempos, em rodizio, para os blocos que mudam. Na
- * superficie, o bloco mais alto; no modo caverna, o chao do andar do jogador. Relevo pelo vizinho do norte, como o mapa
- * do jogo; agua rasa deixa ver o fundo. Os blocos e as cores vem do Loader (Terrain), e a textura e uma do mod
- * (Render.texture, repetida).
+ * The minimap's terrain in a repeating 1024x1024 texture, one pixel per block: block (x, z) lives
+ * at pixel (x mod 1024, z mod 1024), so walking moves nothing. Only the chunks that come into range
+ * are read, nearest first and a few at a time, and one already read is read again now and then, in
+ * rotation, for the blocks that change. The pixels come from {@link MapColumns}; the texture is the
+ * mod's own (Render.texture, repeating).
  *
- * <p>O ritmo e por tempo, nao por quadro: a cor de cada coluna custa caro (o jogo mistura a cor de bioma dos vizinhos,
- * com ruido), e com orcamento por quadro o custo crescia com o FPS — a 1800 FPS eram ~1800 chunks relidos por segundo
- * para um mapa que quase nao muda. Agora no maximo READS_PER_SECOND leituras novas e REFRESH_PER_SECOND releituras por
- * segundo, e nunca mais que BUDGET / uma por quadro: ate 60 FPS e o mesmo de antes; acima, o mesmo que a 60 FPS. O que
- * se le e como se pinta nao mudou, so quando.
+ * <p>The pace is by time, not by frame: each column's color is expensive (the game blends the
+ * neighbours' biome colors, with noise), and with a per-frame budget the cost grew with the FPS (at
+ * 1800 FPS, ~1800 chunks re-read per second for a map that barely changes). Now at most
+ * READS_PER_SECOND new reads and REFRESH_PER_SECOND re-reads per second, and never more than BUDGET
+ * / one per frame: up to 60 FPS it is the same as before; above, the same as at 60 FPS.
  */
 final class MapTexture {
 
     static final int SIZE = 1024;
     private static final int TILES = SIZE / 16;
     private static final int MASK = TILES - 1;
-    /** Chunks lidos por quadro, no maximo. */
-    private static final int BUDGET = 6;
-    /** Ritmo de referencia: o de 60 quadros por segundo com o orcamento acima. */
-    private static final double READS_PER_SECOND = BUDGET * 60.0;
-    private static final double REFRESH_PER_SECOND = 60.0;
-    /** -Dsteinhud.minimap.cost=true: a cada 5 s, o tempo gasto pelo mapa e os chunks lidos. */
-    private static final boolean COST = Boolean.getBoolean("steinhud.minimap.cost");
-    private static final int NONE_Y = Integer.MIN_VALUE;
-    private static final int WALL_Y = Integer.MIN_VALUE + 1;
-    private static final int WALL = 0xFF181818;
-    private static final int VOID = 0xFF050505;
 
-    /** Chunk guardado em cada lugar da textura, e se ja foi lido. */
+    /** Chunks read per frame, at most. */
+    private static final int BUDGET = 6;
+
+    /** The reference pace: 60 frames per second with the budget above. */
+    private static final double READS_PER_SECOND = BUDGET * 60.0;
+
+    private static final double REFRESH_PER_SECOND = 60.0;
+
+    /**
+     * {@code -Dsteinhud.minimap.cost=true}: every 5 s, the time spent by the map and the chunks
+     * read.
+     */
+    private static final boolean COST = Boolean.getBoolean("steinhud.minimap.cost");
+
+    private final Log log;
+    private final MapColumns columns = new MapColumns();
+
+    /** The chunk kept in each place of the texture, and whether it was read. */
     private final long[] keys = new long[TILES * TILES];
+
     private final boolean[] done = new boolean[TILES * TILES];
     private final int[] tile = new int[256];
-    private final int[] north = new int[16];
     private final int[] blank = new int[256];
     private Render.Texture texture;
     private Object world;
-    /** -1 superficie; senao o y dos pes no modo caverna. */
+
+    /** -1 surface; otherwise the feet's y in cave mode. */
     private int layer = Integer.MIN_VALUE;
+
+    private boolean simple;
     private int refresh;
-    /** Leituras novas e releituras disponiveis: baldes que enchem com o tempo, limitados ao de um quadro. */
+
+    /** New reads and re-reads available: buckets that fill with time, capped at one frame's. */
     private double reads = BUDGET;
+
     private double refreshes = 1;
     private long lastNanos;
     private long costAt;
@@ -63,20 +76,25 @@ final class MapTexture {
     private int costFrames;
     private int costReads;
     private int costRefreshes;
-    /** Modo simples: a cor de mapa do jogo e o relevo mais forte — menos detalhe, o contorno das coisas aparece. */
-    private boolean simple;
+
+    MapTexture(Log log) {
+        this.log = log;
+    }
 
     Render.Texture texture() {
         ensure();
         return texture;
     }
 
-    /** Tudo sera lido de novo (cores novas). */
+    /** Everything will be read again (new colors). */
     void reset() {
         world = null;
     }
 
-    /** Le o que falta em volta do chunk (pcx, pcz), raio r em chunks, no andar layer (-1 superficie). */
+    /**
+     * Reads what is missing around chunk (pcx, pcz), radius r in chunks, at level layer (-1
+     * surface).
+     */
     void update(Object w, int pcx, int pcz, int r, int layer, boolean simple) {
         long t0 = System.nanoTime();
         double sec = lastNanos == 0 ? 1.0 : Math.max(0, Math.min(1.0, (t0 - lastNanos) / 1e9));
@@ -89,17 +107,20 @@ final class MapTexture {
         }
     }
 
-    /** Chunks lidos neste quadro: os novos, mais 1000 se houve releitura (a conta do diag). */
+    /**
+     * Chunks read this frame: the new ones, plus 1000 if there was a re-read (the diag's count).
+     */
     private int scanAround(Object w, int pcx, int pcz, int r, int layer, boolean simple) {
         ensure();
         if (w != world || layer != this.layer || simple != this.simple) {
             world = w;
             this.layer = layer;
             this.simple = simple;
+            columns.mode(layer, simple);
             Arrays.fill(keys, Long.MIN_VALUE);
             Arrays.fill(done, false);
         }
-        // Chunk que entrou no alcance: o lugar dele (que guardava outro) fica vazio ate a leitura.
+        // A chunk that came into range: its place (which held another) stays empty until read.
         for (int cz = pcz - r; cz <= pcz + r; cz++) {
             for (int cx = pcx - r; cx <= pcx + r; cx++) {
                 int i = index(cx, cz);
@@ -111,7 +132,7 @@ final class MapTexture {
                 }
             }
         }
-        // Como antes: os mais perto primeiro; a releitura so quando nao falta ler nada que ja chegou.
+        // Nearest first; the re-read only when nothing that has arrived is left to read.
         int start = (int) reads;
         int budget = start;
         boolean pending = false;
@@ -149,7 +170,8 @@ final class MapTexture {
                     continue;
                 }
                 if (budget == 0) {
-                    // Sem leitura disponivel: pendente so o que ja chegou (o que nao chegou nao segura a releitura).
+                    // No read available: pending only what has arrived (what has not does not hold
+                    // the re-read back).
                     pending = Terrain.isLoaded(cx, cz);
                 } else if (scan(cx, cz)) {
                     done[i] = true;
@@ -159,7 +181,8 @@ final class MapTexture {
         }
         int out = start - budget;
         reads -= out;
-        // Antes: releitura quando sobrava orcamento no quadro. Com o balde vazio (FPS alto), quando nada falta.
+        // Re-read when the frame had budget left; with the bucket empty (high FPS), when nothing is
+        // missing.
         if (!pending && (budget > 0 || start == 0) && refreshes >= 1) {
             refreshes -= 1;
             int n = 2 * r + 1;
@@ -183,9 +206,16 @@ final class MapTexture {
             costAt = now;
         } else if (now - costAt >= 5_000_000_000L) {
             double s = (now - costAt) / 1e9;
-            System.out.printf("[mods] minimapa: %.2f ms/s no mapa (%.1f us/quadro, %d quadros), %.0f chunks novos/s, %.0f relidos/s%n",
-                    costNanos / 1e6 / s, costNanos / 1e3 / Math.max(1, costFrames), costFrames, costReads / s,
-                    costRefreshes / s);
+            log.info(
+                    String.format(
+                            Locale.ROOT,
+                            "minimap: %.2f ms/s on the map (%.1f us/frame, %d frames), %.0f new"
+                                    + " chunks/s, %.0f re-read/s",
+                            costNanos / 1e6 / s,
+                            costNanos / 1e3 / Math.max(1, costFrames),
+                            costFrames,
+                            costReads / s,
+                            costRefreshes / s));
             costAt = now;
             costNanos = 0;
             costFrames = 0;
@@ -203,76 +233,11 @@ final class MapTexture {
     }
 
     private boolean scan(int cx, int cz) {
-        if (!Terrain.isLoaded(cx, cz)) {
+        if (!columns.paint(cx, cz, tile)) {
             return false;
-        }
-        boolean hasNorth = Terrain.isLoaded(cx, cz - 1);
-        for (int lx = 0; lx < 16; lx++) {
-            north[lx] = hasNorth ? top((cx << 4) + lx, (cz << 4) - 1) : NONE_Y;
-        }
-        for (int lz = 0; lz < 16; lz++) {
-            for (int lx = 0; lx < 16; lx++) {
-                int x = (cx << 4) + lx;
-                int z = (cz << 4) + lz;
-                int y = top(x, z);
-                int argb;
-                if (y == WALL_Y) {
-                    argb = WALL;
-                } else if (y == NONE_Y) {
-                    argb = VOID;
-                } else {
-                    argb = color(x, y, z);
-                    int n = north[lx];
-                    if (n != NONE_Y && n != WALL_Y && n != y) {
-                        argb = scale(argb, y > n ? (simple ? 1.3F : 1.1F) : (simple ? 0.72F : 0.86F));
-                    }
-                }
-                north[lx] = y;
-                tile[(lz << 4) + lx] = argb;
-            }
         }
         put(cx, cz, tile);
         return true;
-    }
-
-    /** y do bloco a pintar na coluna (x, z), ou parede (WALL_Y) / nada (NONE_Y). */
-    private int top(int x, int z) {
-        if (layer < 0) {
-            int h = Terrain.height(x, z);
-            if (h <= 0) {
-                return NONE_Y;
-            }
-            // O mapa de altura passa por flores, neve fina e vidro: o que estiver logo acima do chao conta.
-            return Terrain.isAir(x, h, z) ? h - 1 : h;
-        }
-        if (Terrain.isSolid(x, layer + 1, z)) {
-            return WALL_Y;
-        }
-        for (int y = layer; y >= Math.max(0, layer - 24); y--) {
-            if (!Terrain.isAir(x, y, z)) {
-                return y;
-            }
-        }
-        return NONE_Y;
-    }
-
-    private int color(int x, int y, int z) {
-        int c = simple ? Terrain.mapColor(x, y, z) : Terrain.color(x, y, z);
-        if (Terrain.isWater(x, y, z)) {
-            // Agua: o fundo aparece no raso, e o fundo escurece.
-            int d = 1;
-            while (d < 12 && Terrain.isWater(x, y - d, z)) {
-                d++;
-            }
-            int fy = d < 12 ? y - d : y - 11;   // fundo alem de 12: fica a cor da propria agua
-            int floor = simple ? Terrain.mapColor(x, fy, z) : Terrain.color(x, fy, z);
-            c = mix(c, floor, d <= 1 ? 0.5F : d <= 3 ? 0.3F : d <= 6 ? 0.15F : 0.05F);
-            c = scale(c, 1.0F - Math.min(d, 10) * 0.025F);
-        }
-        if (layer >= 0) {
-            c = scale(c, Math.max(0.35F, 1.0F - (layer - y) * 0.06F)); // caverna: mais fundo, mais escuro
-        }
-        return c;
     }
 
     private void put(int cx, int cz, int[] data) {
@@ -281,22 +246,8 @@ final class MapTexture {
 
     private void ensure() {
         if (texture == null) {
-            texture = Render.texture(SIZE, SIZE, true);   // repetida: o bloco (x, z) fica sempre no mesmo pixel
+            // Repeating: block (x, z) always lives at the same pixel.
+            texture = Render.texture(SIZE, SIZE, true);
         }
-    }
-
-    static int scale(int argb, float f) {
-        int r = Math.min(255, (int) (((argb >> 16) & 0xFF) * f));
-        int g = Math.min(255, (int) (((argb >> 8) & 0xFF) * f));
-        int b = Math.min(255, (int) ((argb & 0xFF) * f));
-        return (argb & 0xFF000000) | r << 16 | g << 8 | b;
-    }
-
-    /** a com uma fracao f de b. */
-    static int mix(int a, int b, float f) {
-        int r = (int) (((a >> 16) & 0xFF) * (1 - f) + ((b >> 16) & 0xFF) * f);
-        int g = (int) (((a >> 8) & 0xFF) * (1 - f) + ((b >> 8) & 0xFF) * f);
-        int bl = (int) ((a & 0xFF) * (1 - f) + (b & 0xFF) * f);
-        return 0xFF000000 | r << 16 | g << 8 | bl;
     }
 }

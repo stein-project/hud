@@ -13,9 +13,10 @@ import dev.xavier.stein.loader.api.Relation;
 import dev.xavier.stein.loader.api.Relations;
 
 /**
- * Aliados, inimigos e grupos pelo Loader (Relations e Players): quem alimenta e o Combat, ou qualquer outro mod — o HUD
- * nao conhece nenhum deles, so pergunta. Sem ninguem cadastrando nada, ninguem tem relacao e o minimapa pinta todos de
- * branco. Os nomes daqui sao os que o Tab e o minimapa ja usavam.
+ * Allies, enemies and groups through the Loader (Relations and Players): the Combat mod feeds them,
+ * or any other mod; the HUD knows none of them, it only asks. With nobody registering anything,
+ * nobody has a relation and the minimap paints everyone white. The names here are the ones the Tab
+ * list and the minimap already used.
  */
 final class CombatLink {
 
@@ -25,15 +26,14 @@ final class CombatLink {
     static final int ENEMY = 3;
     static final int NEUTRAL = 4;
 
-    private CombatLink() {
-    }
+    private CombatLink() {}
 
-    /** Alguem esta dizendo relacoes (o Combat ou outro mod)? */
+    /** Is anyone telling relations (the Combat mod or another)? */
     static boolean available() {
         return Relations.of(Players.self()) != Relation.NONE || Relations.version() > 0;
     }
 
-    /** {@link #NONE}, {@link #ALLY}, {@link #CLAN}, {@link #ENEMY} ou {@link #NEUTRAL}. */
+    /** {@link #NONE}, {@link #ALLY}, {@link #CLAN}, {@link #ENEMY} or {@link #NEUTRAL}. */
     static int relation(String nick) {
         return switch (Relations.of(nick)) {
             case GROUP -> CLAN;
@@ -41,17 +41,20 @@ final class CombatLink {
             case ENEMY -> ENEMY;
             case NEUTRAL -> NEUTRAL;
             case NONE -> NONE;
-            // Voce mesmo fica com os do seu grupo, como antes; sem grupo, neutro.
+            // You yourself go with your group, as before; without a group, neutral.
             case SELF -> Players.group(nick) != null ? CLAN : NEUTRAL;
         };
     }
 
-    /** O grupo do jogador ("ABC"), ou null. */
+    /** The player's group ("ABC"), or null. */
     static String clan(String nick) {
         return Players.group(nick);
     }
 
-    /** A cor do nick (RGB): a escolhida para a relacao dele (no Combat, ou em quem as define). */
+    /**
+     * The nick's color (RGB): the one chosen for their relation (in the Combat mod, or whoever
+     * defines them).
+     */
     static int color(String nick) {
         return switch (relation(nick)) {
             case CLAN -> Relations.color(Relation.GROUP);
@@ -62,12 +65,12 @@ final class CombatLink {
         };
     }
 
-    /** A cor dos aliados (RGB). */
+    /** The allies' color (RGB). */
     static int allyColor() {
         return Relations.color(Relation.ALLY);
     }
 
-    /** A cor de cada relacao (RGB), para os titulos do Tab. */
+    /** Each relation's color (RGB), for the Tab list's titles. */
     static int colorOf(int relation) {
         return switch (relation) {
             case CLAN -> Relations.color(Relation.GROUP);

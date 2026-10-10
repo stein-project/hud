@@ -8,6 +8,13 @@
 
 package dev.xavier.stein.hud;
 
+import static java.lang.foreign.ValueLayout.ADDRESS;
+import static java.lang.foreign.ValueLayout.JAVA_DOUBLE;
+import static java.lang.foreign.ValueLayout.JAVA_INT;
+import static java.lang.foreign.ValueLayout.JAVA_LONG;
+
+import dev.xavier.stein.loader.api.Log;
+
 import java.lang.foreign.Arena;
 import java.lang.foreign.FunctionDescriptor;
 import java.lang.foreign.Linker;
@@ -18,24 +25,22 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
-import static java.lang.foreign.ValueLayout.ADDRESS;
-import static java.lang.foreign.ValueLayout.JAVA_DOUBLE;
-import static java.lang.foreign.ValueLayout.JAVA_INT;
-import static java.lang.foreign.ValueLayout.JAVA_LONG;
-
 /**
- * Contadores de desempenho do Windows (pdh.dll), os mesmos do Gerenciador de Tarefas: uso do processador (% Processor
- * Utility) e da placa de video (GPU Engine). Pela API de funcoes nativas do Java 25; so na thread que o abriu (a dos
- * sensores). Nomes em ingles (PdhAddEnglishCounter): valem em Windows de qualquer idioma.
+ * Windows performance counters (pdh.dll), the Task Manager's: processor usage (% Processor Utility)
+ * and graphics card usage (GPU Engine). Through Java 25's foreign function API; only on the thread
+ * that opened it (the sensors'). English names (PdhAddEnglishCounter): they work on Windows in any
+ * language.
  */
 final class Pdh implements AutoCloseable {
 
     private static final int FMT_DOUBLE = 0x00000200;
     private static final int FMT_NOCAP100 = 0x00008000;
     private static final int MORE_DATA = 0x800007D2;
-    /** PDH_FMT_COUNTERVALUE: status (4 bytes, mais 4 de alinhamento) e o valor (8). */
+
+    /** PDH_FMT_COUNTERVALUE: status (4 bytes, plus 4 of alignment) and the value (8). */
     private static final long VALUE_SIZE = 16;
-    /** PDH_FMT_COUNTERVALUE_ITEM_W: ponteiro para o nome e o valor. */
+
+    /** PDH_FMT_COUNTERVALUE_ITEM_W: a pointer to the name, and the value. */
     private static final long ITEM_SIZE = 8 + VALUE_SIZE;
 
     private final Arena arena = Arena.ofConfined();
@@ -50,18 +55,31 @@ final class Pdh implements AutoCloseable {
     private Pdh() throws Throwable {
         Linker linker = Linker.nativeLinker();
         SymbolLookup lib = SymbolLookup.libraryLookup("pdh.dll", arena);
-        MethodHandle open = linker.downcallHandle(lib.find("PdhOpenQueryW").orElseThrow(),
-                FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_LONG, ADDRESS));
-        MethodHandle add = linker.downcallHandle(lib.find("PdhAddEnglishCounterW").orElseThrow(),
-                FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, JAVA_LONG, ADDRESS));
-        collect = linker.downcallHandle(lib.find("PdhCollectQueryData").orElseThrow(),
-                FunctionDescriptor.of(JAVA_INT, ADDRESS));
-        value = linker.downcallHandle(lib.find("PdhGetFormattedCounterValue").orElseThrow(),
-                FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, ADDRESS));
-        array = linker.downcallHandle(lib.find("PdhGetFormattedCounterArrayW").orElseThrow(),
-                FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
-        closeQuery = linker.downcallHandle(lib.find("PdhCloseQuery").orElseThrow(),
-                FunctionDescriptor.of(JAVA_INT, ADDRESS));
+        MethodHandle open =
+                linker.downcallHandle(
+                        lib.find("PdhOpenQueryW").orElseThrow(),
+                        FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_LONG, ADDRESS));
+        MethodHandle add =
+                linker.downcallHandle(
+                        lib.find("PdhAddEnglishCounterW").orElseThrow(),
+                        FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS, JAVA_LONG, ADDRESS));
+        collect =
+                linker.downcallHandle(
+                        lib.find("PdhCollectQueryData").orElseThrow(),
+                        FunctionDescriptor.of(JAVA_INT, ADDRESS));
+        value =
+                linker.downcallHandle(
+                        lib.find("PdhGetFormattedCounterValue").orElseThrow(),
+                        FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, ADDRESS));
+        array =
+                linker.downcallHandle(
+                        lib.find("PdhGetFormattedCounterArrayW").orElseThrow(),
+                        FunctionDescriptor.of(
+                                JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, ADDRESS, ADDRESS));
+        closeQuery =
+                linker.downcallHandle(
+                        lib.find("PdhCloseQuery").orElseThrow(),
+                        FunctionDescriptor.of(JAVA_INT, ADDRESS));
 
         MemorySegment out = arena.allocate(ADDRESS);
         int st = (int) open.invokeExact(MemorySegment.NULL, 0L, out);
@@ -74,31 +92,40 @@ final class Pdh implements AutoCloseable {
         gpu = counter(add, "\\GPU Engine(*)\\Utilization Percentage");
     }
 
-    /** Aberto, ou null fora do Windows ou sem os contadores. */
-    static Pdh open() {
+    /** Open, or null outside Windows or without the counters. */
+    static Pdh open(Log log) {
         if (!System.getProperty("os.name", "").startsWith("Windows")) {
             return null;
         }
         try {
             return new Pdh();
         } catch (Throwable t) {
-            System.out.println("[mods] HUD: sem contadores do Windows (" + t + "); CPU pelo Java, GPU indisponivel");
+            log.warn("no Windows counters (" + t + "); CPU and GPU unavailable");
             return null;
         }
     }
 
     private MemorySegment counter(MethodHandle add, String path) throws Throwable {
         MemorySegment out = arena.allocate(ADDRESS);
-        int st = (int) add.invokeExact(query, arena.allocateFrom(path, StandardCharsets.UTF_16LE), 0L, out);
+        int st =
+                (int)
+                        add.invokeExact(
+                                query,
+                                arena.allocateFrom(path, StandardCharsets.UTF_16LE),
+                                0L,
+                                out);
         return st == 0 ? out.get(ADDRESS, 0) : null;
     }
 
-    /** Nova amostra; os valores sao a media desde a anterior (o primeiro so sai na segunda). */
+    /**
+     * A new sample; the values are the average since the previous one (the first comes on the
+     * second).
+     */
     void collect() throws Throwable {
         int st = (int) collect.invokeExact(query);
     }
 
-    /** Uso do processador, 0-100; -1 sem dado. */
+    /** Processor usage, 0-100; -1 without data. */
     double cpu() throws Throwable {
         if (cpu == null) {
             return -1;
@@ -114,8 +141,8 @@ final class Pdh implements AutoCloseable {
     }
 
     /**
-     * Uso da placa de video, 0-100; -1 sem dado. Como o Gerenciador de Tarefas: soma o uso de todos os processos em
-     * cada motor da placa (3D, copia, video...) e fica com o mais ocupado.
+     * Graphics card usage, 0-100; -1 without data. Like the Task Manager: adds up every process's
+     * usage on each engine of the card (3D, copy, video...) and keeps the busiest.
      */
     double gpu() throws Throwable {
         if (gpu == null) {
@@ -124,7 +151,14 @@ final class Pdh implements AutoCloseable {
         try (Arena a = Arena.ofConfined()) {
             MemorySegment size = a.allocate(JAVA_INT);
             MemorySegment count = a.allocate(JAVA_INT);
-            int st = (int) array.invokeExact(gpu, FMT_DOUBLE | FMT_NOCAP100, size, count, MemorySegment.NULL);
+            int st =
+                    (int)
+                            array.invokeExact(
+                                    gpu,
+                                    FMT_DOUBLE | FMT_NOCAP100,
+                                    size,
+                                    count,
+                                    MemorySegment.NULL);
             if (st != MORE_DATA) {
                 return -1;
             }
@@ -133,7 +167,8 @@ final class Pdh implements AutoCloseable {
             if (st != 0) {
                 return -1;
             }
-            // Instancia: "pid_1234_luid_0x..._0x..._phys_0_eng_3_engtype_3D"; o motor e o que vem de "luid_".
+            // Instance: "pid_1234_luid_0x..._0x..._phys_0_eng_3_engtype_3D"; the engine is what
+            // comes from "luid_".
             Map<String, Double> engines = new HashMap<>();
             int n = count.get(JAVA_INT, 0);
             for (int i = 0; i < n; i++) {
@@ -141,9 +176,15 @@ final class Pdh implements AutoCloseable {
                 if (!valid(items.get(JAVA_INT, off + 8))) {
                     continue;
                 }
-                String name = items.get(ADDRESS, off).reinterpret(Long.MAX_VALUE).getString(0, StandardCharsets.UTF_16LE);
+                String name =
+                        items.get(ADDRESS, off)
+                                .reinterpret(Long.MAX_VALUE)
+                                .getString(0, StandardCharsets.UTF_16LE);
                 int luid = name.indexOf("luid_");
-                engines.merge(luid >= 0 ? name.substring(luid) : name, items.get(JAVA_DOUBLE, off + 16), Double::sum);
+                engines.merge(
+                        luid >= 0 ? name.substring(luid) : name,
+                        items.get(JAVA_DOUBLE, off + 16),
+                        Double::sum);
             }
             double max = engines.isEmpty() ? -1 : 0;
             for (double v : engines.values()) {
@@ -153,7 +194,7 @@ final class Pdh implements AutoCloseable {
         }
     }
 
-    /** PDH_CSTATUS_VALID_DATA ou PDH_CSTATUS_NEW_DATA. */
+    /** PDH_CSTATUS_VALID_DATA or PDH_CSTATUS_NEW_DATA. */
     private static boolean valid(int status) {
         return status == 0 || status == 1;
     }
@@ -167,7 +208,7 @@ final class Pdh implements AutoCloseable {
         try {
             int st = (int) closeQuery.invokeExact(query);
         } catch (Throwable ignored) {
-            // a consulta morre com o processo de qualquer jeito
+            // the query dies with the process anyway
         }
         arena.close();
     }
