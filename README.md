@@ -55,7 +55,7 @@ mod, also check that:
   Stein GFX renderer and the fixed-function fallback (`-Dsteinbridge.gfx=false`);
 - the text is translated in `en_US`, `pt_BR` and `es_ES` (`src/main/resources/assets/steinhud/lang`).
 
-Releases are made by the maintainer: a `v<version>` tag, with `changelog/<version>.en_US.md` and `.pt_BR.md`
+Releases are made by the maintainer: a `v<version>` tag, with `changelog/<version>.en_US.md` (and optionally `.pt_BR.md`)
 written first (see `.github/workflows/release.yml`).
 
 ## Licence
