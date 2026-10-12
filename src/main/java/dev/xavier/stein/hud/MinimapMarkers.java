@@ -154,7 +154,7 @@ final class MinimapMarkers {
      * white.
      */
     private int playerColor(String nick) {
-        return c.combat ? CombatLink.color(nick) : NEUTRAL;
+        return c.combat ? RelationLink.color(nick) : NEUTRAL;
     }
 
     /** The player's arrow at the centre: up with the map turning; otherwise, where they face. */

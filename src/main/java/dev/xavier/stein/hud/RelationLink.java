@@ -13,12 +13,12 @@ import dev.xavier.stein.loader.api.Relation;
 import dev.xavier.stein.loader.api.Relations;
 
 /**
- * Allies, enemies and groups through the Loader (Relations and Players): the Combat mod feeds them,
- * or any other mod; the HUD knows none of them, it only asks. With nobody registering anything,
- * nobody has a relation and the minimap paints everyone white. The names here are the ones the Tab
- * list and the minimap already used.
+ * Allies, enemies and groups through the Loader (Relations and Players): any mod that marks players
+ * feeds them; the HUD knows none of them, it only asks. With nobody registering anything, nobody
+ * has a relation and the minimap paints everyone white. The names here are the ones the Tab list
+ * and the minimap already used.
  */
-final class CombatLink {
+final class RelationLink {
 
     static final int NONE = 0;
     static final int ALLY = 1;
@@ -26,9 +26,9 @@ final class CombatLink {
     static final int ENEMY = 3;
     static final int NEUTRAL = 4;
 
-    private CombatLink() {}
+    private RelationLink() {}
 
-    /** Is anyone telling relations (the Combat mod or another)? */
+    /** Is anyone telling relations (any mod)? */
     static boolean available() {
         return Relations.of(Players.self()) != Relation.NONE || Relations.version() > 0;
     }
@@ -52,8 +52,8 @@ final class CombatLink {
     }
 
     /**
-     * The nick's color (RGB): the one chosen for their relation (in the Combat mod, or whoever
-     * defines them).
+     * The nick's color (RGB): the one chosen for their relation (by the mod that marks them, or
+     * whoever defines them).
      */
     static int color(String nick) {
         return switch (relation(nick)) {

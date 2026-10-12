@@ -231,7 +231,7 @@ final class TargetHud extends HudElement {
         int y = 0;
         String title = title();
         if (!title.isEmpty()) {
-            int color = c.name ? CombatLink.color(drawnNick) : 0xFFFFFF;
+            int color = c.name ? RelationLink.color(drawnNick) : 0xFFFFFF;
             Render.text(title, x, y + 1, Render.alpha(0xFF000000 | color, a), true);
             y += 10;
         }

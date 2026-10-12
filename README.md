@@ -8,8 +8,8 @@ better Tab list.
   distance, health, armor and held item). Move, resize and turn each one on or off on the grid (Right Shift), where
   each element also has its own options.
 - **Minimap**: detailed or simple terrain, or radar only; square or round, turning with you or north up; players,
-  monsters, animals and spawners, with relation colors (allies, enemies, your clan) when a mod such as Combat
-  provides them; caves in the Nether and underground.
+  monsters, animals and spawners, with relation colors (allies, enemies, your clan) when a mod that marks
+  them provides them; caves in the Nether and underground.
 - **Tab list**: the server's, or ours: ping as bars, number or both, heads, distance, up to 500 players instead of
   80, filters (with clan, my clan, allies, enemies, nearby), sorting (ping, name, distance) and groups (by clan or by
   relation). Set it up on the Panel (Right Shift) > HUD.

@@ -21,7 +21,7 @@ import java.util.Map;
 /**
  * Who is on our Tab list and in which order: the server's list, filtered, sorted, capped and, when
  * asked, grouped with a title and a count per group. Clan and relation come from the Loader's
- * Relations (fed by the Combat mod or any other).
+ * Relations (fed by any mod that marks players).
  *
  * <p><b>What the client does not know:</b> which world each one on the list is in. The 1.8.9
  * protocol does not say, and on a network with several servers the list may hold people from
@@ -50,7 +50,9 @@ final class TabEntries {
 
     static final int[] LIMITS = {20, 40, 80, 150, 250, 500};
 
-    /** Each relation group's name, by CombatLink code (NONE never shows: every player has one). */
+    /**
+     * Each relation group's name, by RelationLink code (NONE never shows: every player has one).
+     */
     static final String[] RELATION_NAMES = {
         "tab.noClan", "tab.allies", "tab.myClan", "tab.enemies", "tab.noClan"
     };
@@ -169,8 +171,8 @@ final class TabEntries {
             l.team = p.team;
             l.ping = p.ping;
             l.spectator = p.spectator;
-            l.relation = CombatLink.relation(nick);
-            l.clan = CombatLink.clan(nick);
+            l.relation = RelationLink.relation(nick);
+            l.clan = RelationLink.clan(nick);
             Object e = loaded.get(nick);
             if (e != null && self != null) {
                 l.distance = Entities.distance(e, self);
@@ -186,7 +188,10 @@ final class TabEntries {
         Map<String, Integer> clanRank = new HashMap<>();
         for (Line l : out) {
             if (l.clan != null) {
-                int r = l.relation == CombatLink.CLAN ? 0 : l.relation == CombatLink.ALLY ? 1 : 2;
+                int r =
+                        l.relation == RelationLink.CLAN
+                                ? 0
+                                : l.relation == RelationLink.ALLY ? 1 : 2;
                 clanRank.merge(l.clan, r, Math::min);
             }
         }
@@ -221,7 +226,7 @@ final class TabEntries {
         if (!DEBUG) {
             return false;
         }
-        String mine = Players.self() == null ? null : CombatLink.clan(Players.self());
+        String mine = Players.self() == null ? null : RelationLink.clan(Players.self());
         if (kept == 0) {
             empties++;
         }
@@ -270,9 +275,9 @@ final class TabEntries {
     private boolean keep(Line l) {
         return switch (c.filter) {
             case 1 -> l.clan != null;
-            case 2 -> l.relation == CombatLink.CLAN;
-            case 3 -> l.relation == CombatLink.CLAN || l.relation == CombatLink.ALLY;
-            case 4 -> l.relation == CombatLink.ENEMY;
+            case 2 -> l.relation == RelationLink.CLAN;
+            case 3 -> l.relation == RelationLink.CLAN || l.relation == RelationLink.ALLY;
+            case 4 -> l.relation == RelationLink.ENEMY;
             case FILTER_NEARBY -> l.distance >= 0 && (radius() == 0 || l.distance <= radius());
             default -> true;
         };
@@ -356,9 +361,9 @@ final class TabEntries {
             return Comparator.<Line>comparingInt(
                             l ->
                                     switch (l.relation) {
-                                        case CombatLink.CLAN -> 0;
-                                        case CombatLink.ALLY -> 1;
-                                        case CombatLink.ENEMY -> 2;
+                                        case RelationLink.CLAN -> 0;
+                                        case RelationLink.ALLY -> 1;
+                                        case RelationLink.ENEMY -> 2;
                                         default -> 3;
                                     })
                     .thenComparing(base);

@@ -70,12 +70,12 @@ final class TabSelfTest {
         long start = System.nanoTime();
         try {
             Map<String, Ref> refs = references();
-            String mine = CombatLink.clan(Players.self());
+            String mine = RelationLink.clan(Players.self());
             log.info(
                     TAG
                             + refs.size()
                             + " players on the list, relations "
-                            + (CombatLink.available() ? "on" : "MISSING")
+                            + (RelationLink.available() ? "on" : "MISSING")
                             + ", my clan "
                             + mine);
             int[] perFilter = new int[TabEntries.FILTERS.length];
@@ -161,8 +161,8 @@ final class TabSelfTest {
         for (Players.Entry p : Players.list()) {
             Ref r = new Ref();
             r.nick = p.nick;
-            r.clan = CombatLink.clan(r.nick);
-            r.relation = CombatLink.relation(r.nick);
+            r.clan = RelationLink.clan(r.nick);
+            r.relation = RelationLink.relation(r.nick);
             r.ping = p.ping;
             r.team = p.team;
             r.spectator = p.spectator;
@@ -183,9 +183,9 @@ final class TabSelfTest {
         int max = TabEntries.RADIUS[radius];
         return switch (filter) {
             case 1 -> r.clan != null;
-            case 2 -> r.relation == CombatLink.CLAN;
-            case 3 -> r.relation == CombatLink.CLAN || r.relation == CombatLink.ALLY;
-            case 4 -> r.relation == CombatLink.ENEMY;
+            case 2 -> r.relation == RelationLink.CLAN;
+            case 3 -> r.relation == RelationLink.CLAN || r.relation == RelationLink.ALLY;
+            case 4 -> r.relation == RelationLink.ENEMY;
             case 5 -> r.distance >= 0 && (max == 0 || r.distance <= max);
             default -> true;
         };
@@ -341,7 +341,9 @@ final class TabSelfTest {
         for (Ref r : refs.values()) {
             if (r.clan != null && passes(c.filter, c.radius, r)) {
                 int rank =
-                        r.relation == CombatLink.CLAN ? 0 : r.relation == CombatLink.ALLY ? 1 : 2;
+                        r.relation == RelationLink.CLAN
+                                ? 0
+                                : r.relation == RelationLink.ALLY ? 1 : 2;
                 clanRanks.merge(r.clan, rank, Math::min);
             }
         }

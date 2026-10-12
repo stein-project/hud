@@ -202,7 +202,8 @@ final class TabList {
      */
     private static int relationColor(int relation) {
         return switch (relation) {
-            case CombatLink.CLAN, CombatLink.ALLY, CombatLink.ENEMY -> CombatLink.colorOf(relation);
+            case RelationLink.CLAN, RelationLink.ALLY, RelationLink.ENEMY ->
+                    RelationLink.colorOf(relation);
             default -> 0xD0D0D0;
         };
     }
@@ -247,7 +248,7 @@ final class TabList {
         if (c.nameColor != 2 || l.player == null) {
             return 0xFFFFFF;
         }
-        return CombatLink.color(l.nick);
+        return RelationLink.color(l.nick);
     }
 
     private static int pingColor(int ms) {
