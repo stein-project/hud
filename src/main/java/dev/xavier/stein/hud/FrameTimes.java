@@ -13,6 +13,10 @@ import java.util.Arrays;
 /**
  * Frame durations for the performance element: the 1% low (the average of the slowest 1% of frames
  * over the last 10 s) and the worst frame of the last second.
+ *
+ * <p>Only frames of the game being played count: on the pause menu (which the game also opens when
+ * the window loses focus) the Stein Bridge holds the frame rate down, so those frames are slow on
+ * purpose, and counting them made the 1% low look like lag for the next 10 s ({@link #pause}).
  */
 final class FrameTimes {
 
@@ -47,6 +51,14 @@ final class FrameTimes {
             }
         }
         lastFrame = now;
+    }
+
+    /**
+     * A frame that does not count (the game is paused). The next counted frame starts a new
+     * interval, so the time spent paused never enters the window either.
+     */
+    void pause() {
+        lastFrame = 0;
     }
 
     /** The worst (longest) frame of the last second, in ms; -1 with few frames. */
