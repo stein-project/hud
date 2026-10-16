@@ -12,6 +12,7 @@ import dev.xavier.stein.loader.api.Game;
 import dev.xavier.stein.loader.api.Option;
 import dev.xavier.stein.loader.api.Players;
 import dev.xavier.stein.loader.api.Render;
+import dev.xavier.stein.loader.api.Screens;
 import dev.xavier.stein.loader.api.Server;
 
 import java.util.ArrayList;
@@ -25,7 +26,8 @@ import java.util.Locale;
  *
  * <ul>
  *   <li>FPS: the F3 number. 1% low and peak (the longest frame of the last second, in ms: the
- *       stutter the average FPS hides): {@link FrameTimes}.
+ *       stutter the average FPS hides): {@link FrameTimes}, without the frames of the pause menu,
+ *       where the Stein Bridge holds the frame rate down; back in the game they update at once.
  *   <li>The color comes from the machine's target (the monitor's refresh rate, or the FPS limit if
  *       lower), not from a fixed 60/30.
  *   <li>Ping: the one the client measures itself ({@link Server#latency}), like the server list
@@ -52,6 +54,7 @@ final class StatsBlock extends HudElement {
     private final ClickCounter left = new ClickCounter();
     private final ClickCounter right = new ClickCounter();
     private long next;
+    private boolean paused;
     private int low = -1;
 
     /** The worst frame of the last second, in ms; -1 without a measure. */
@@ -82,7 +85,16 @@ final class StatsBlock extends HudElement {
     public boolean layout(boolean preview, float partialTicks) {
         long now = System.nanoTime();
         if (!preview) {
-            frames.frame(now);
+            boolean pause = Screens.currentKind() == Screens.Kind.PAUSE;
+            if (pause) {
+                frames.pause();
+            } else {
+                frames.frame(now);
+                if (paused) {
+                    next = now; // back in the game: no waiting a second with the menu's numbers
+                }
+            }
+            paused = pause;
         }
         if (now - next >= 0) {
             next = now + SECOND;
