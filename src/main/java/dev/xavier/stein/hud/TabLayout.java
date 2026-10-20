@@ -77,9 +77,10 @@ final class TabLayout {
             String header,
             String footer,
             boolean note,
+            boolean distance,
             TabConfig c) {
         int pingW = (c.ping != 1 ? 12 : 0) + (c.ping != 0 ? Render.textWidth("999 ms") + 4 : 0);
-        int distW = c.distance ? Render.textWidth("999 m") + 6 : 0;
+        int distW = distance ? Render.textWidth("999 m") + 6 : 0;
         TabLayout at = new TabLayout();
         at.cellW = (c.heads ? HEAD + 2 : 0) + nameW + 6 + distW + scoreW + pingW;
         int size = lines.size();

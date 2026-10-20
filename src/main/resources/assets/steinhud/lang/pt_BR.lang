@@ -132,3 +132,5 @@ steinhud.target.healthBar=Barra de vida
 steinhud.target.healthText=Vida em número
 steinhud.target.animation=Animação
 steinhud.target.aim=Alvo na mira
+steinhud.restricted=Neste servidor
+steinhud.restricted.by=Desligado no %s

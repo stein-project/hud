@@ -43,6 +43,10 @@ final class TabEntries {
 
     static final String[] GROUPS = {"off", "tab.byClan", "tab.byRelation"};
     static final String[] SORTS = {"tab.server", "tab.ping", "tab.name", "tab.distance"};
+
+    /** The index of "distance" in {@link #SORTS}. */
+    static final int SORT_DISTANCE = 3;
+
     static final int[] RADIUS = {0, 16, 32, 64, 128, 256};
 
     /** Most players on the list; 80 is the game's and the default. */
@@ -159,6 +163,8 @@ final class TabEntries {
             loaded.put(Entities.name(e), e);
         }
         Object self = Entities.self();
+        // Where the server does not allow the players' distance it is not even measured.
+        boolean distances = ServerLimits.allows(ServerLimits.DISTANCE);
         List<Line> out = new ArrayList<>();
         total = 0;
         for (Players.Entry p : Players.list()) {
@@ -174,7 +180,7 @@ final class TabEntries {
             l.relation = RelationLink.relation(nick);
             l.clan = RelationLink.clan(nick);
             Object e = loaded.get(nick);
-            if (e != null && self != null) {
+            if (distances && e != null && self != null) {
                 l.distance = Entities.distance(e, self);
             }
             if (keep(l)) {
@@ -273,7 +279,7 @@ final class TabEntries {
      * ally.
      */
     private boolean keep(Line l) {
-        return switch (c.filter) {
+        return switch (filter()) {
             case 1 -> l.clan != null;
             case 2 -> l.relation == RelationLink.CLAN;
             case 3 -> l.relation == RelationLink.CLAN || l.relation == RelationLink.ALLY;
@@ -281,6 +287,21 @@ final class TabEntries {
             case FILTER_NEARBY -> l.distance >= 0 && (radius() == 0 || l.distance <= radius());
             default -> true;
         };
+    }
+
+    /**
+     * The filter in use: "nearby" becomes everyone on a server that does not allow the players'
+     * distance. The player's choice is kept as it was, for when they leave.
+     */
+    int filter() {
+        return c.filter == FILTER_NEARBY && !ServerLimits.allows(ServerLimits.DISTANCE)
+                ? 0
+                : c.filter;
+    }
+
+    /** The order in use: by distance becomes the game's where distance is not allowed. */
+    int sort() {
+        return c.sort == SORT_DISTANCE && !ServerLimits.allows(ServerLimits.DISTANCE) ? 0 : c.sort;
     }
 
     private int radius() {
@@ -332,7 +353,7 @@ final class TabEntries {
                 Comparator.comparing((Line l) -> l.nick, String.CASE_INSENSITIVE_ORDER)
                         .thenComparing(l -> l.nick);
         Comparator<Line> base =
-                switch (c.sort) {
+                switch (sort()) {
                     case 1 ->
                             Comparator.<Line>comparingInt(
                                             l -> l.ping <= 0 ? Integer.MAX_VALUE : l.ping)

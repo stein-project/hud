@@ -113,6 +113,7 @@ final class TabPage {
                                     save.run();
                                 })
                         .advanced());
+        page.option(ServerLimits.note(ServerLimits.DISTANCE));
         page.option(
                 Option.toggle(
                                 T.tr("tab.distance"),
@@ -185,6 +186,7 @@ final class TabPage {
 
     private void order(Page page) {
         page.section(T.tr("tab.order"));
+        page.option(ServerLimits.note(ServerLimits.DISTANCE));
         page.option(
                 Option.cycle(
                         T.tr("tab.show"),

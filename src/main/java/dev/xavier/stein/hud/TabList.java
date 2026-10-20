@@ -36,6 +36,9 @@ final class TabList {
     private final TabConfig c;
     private final TabEntries entries;
 
+    /** The distance column this frame: the player's option, if the server allows it. */
+    private boolean showDistance;
+
     /** The drawing's result, written by the game font's callback. */
     private boolean drawn;
 
@@ -74,10 +77,12 @@ final class TabList {
         // With a filter on, a row saying which one and how many were kept out of how many: without
         // it, a list that shrank looks like a broken list, and the filter itself is the
         // explanation.
+        int filter = entries.filter();
+        showDistance = c.distance && ServerLimits.allows(ServerLimits.DISTANCE);
         String note =
-                c.filter == 0
+                filter == 0
                         ? null
-                        : T.tr(TabEntries.FILTERS[clamp(c.filter, TabEntries.FILTERS.length)])
+                        : T.tr(TabEntries.FILTERS[clamp(filter, TabEntries.FILTERS.length)])
                                 + " · "
                                 + entries.kept
                                 + "/"
@@ -102,6 +107,7 @@ final class TabList {
                         header,
                         footer,
                         note != null,
+                        showDistance,
                         c);
         float scale = at.scale;
         int columns = at.columns;
@@ -232,7 +238,7 @@ final class TabList {
             Render.text(ms, right - Render.textWidth(ms), y, pingColor(l.ping), true);
             right -= Render.textWidth(ms) + 4;
         }
-        if (c.distance) {
+        if (showDistance) {
             String d = l.distance < 0 ? "--" : Math.round(l.distance) + " m";
             Render.text("§7" + d, right - Render.textWidth(d), y, 0xA0A0A0, true);
             right -= Render.textWidth(d) + 6;
