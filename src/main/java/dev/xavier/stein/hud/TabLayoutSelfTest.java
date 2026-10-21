@@ -82,7 +82,9 @@ final class TabLayoutSelfTest {
             boolean note,
             String cfg) {
         layouts++;
-        TabLayout at = TabLayout.of(out, nameW, 0, screen[0], screen[1], header, footer, note, v);
+        TabLayout at =
+                TabLayout.of(
+                        out, nameW, 0, screen[0], screen[1], header, footer, note, v.distance, v);
         String where =
                 cfg
                         + "[screen "

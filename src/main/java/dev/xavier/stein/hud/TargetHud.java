@@ -74,6 +74,10 @@ final class TargetHud extends HudElement {
 
     @Override
     public boolean layout(boolean preview, float partialTicks) {
+        if (!preview && !ServerLimits.allows(ServerLimits.TARGET)) {
+            target = null; // this server does not allow it: nothing shows, nothing is kept
+            return false;
+        }
         long now = System.nanoTime();
         float dt = lastFrame == 0 ? 0 : Math.min(0.1F, (now - lastFrame) / 1e9F);
         lastFrame = now;
@@ -317,6 +321,7 @@ final class TargetHud extends HudElement {
 
     @Override
     void addOptions(List<Option> out) {
+        out.add(ServerLimits.note(ServerLimits.TARGET));
         out.add(Option.toggle(T.tr("target.aim"), () -> c.aim, v -> c.aim = v));
         out.add(
                 Option.slider(

@@ -99,6 +99,9 @@ final class Minimap extends HudElement {
 
     @Override
     public boolean layout(boolean preview, float partialTicks) {
+        if (!preview && !ServerLimits.allows(ServerLimits.MINIMAP)) {
+            return false; // this server does not allow minimaps (the player's choice stays as is)
+        }
         self = Entities.self();
         world = Terrain.current();
         if ((self == null || world == null) && !preview) {
@@ -256,6 +259,7 @@ final class Minimap extends HudElement {
 
     @Override
     void addOptions(List<Option> out) {
+        out.add(ServerLimits.note(ServerLimits.MINIMAP));
         out.add(
                 Option.cycle(
                         T.tr("minimap.mode"),
