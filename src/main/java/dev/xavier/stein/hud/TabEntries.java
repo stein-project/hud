@@ -165,6 +165,7 @@ final class TabEntries {
         Object self = Entities.self();
         // Where the server does not allow the players' distance it is not even measured.
         boolean distances = ServerLimits.allows(ServerLimits.DISTANCE);
+        int filter = distances || c.filter != FILTER_NEARBY ? c.filter : 0;
         List<Line> out = new ArrayList<>();
         total = 0;
         for (Players.Entry p : Players.list()) {
@@ -183,7 +184,7 @@ final class TabEntries {
             if (distances && e != null && self != null) {
                 l.distance = Entities.distance(e, self);
             }
-            if (keep(l)) {
+            if (keep(l, filter)) {
                 out.add(l);
             }
         }
@@ -278,8 +279,8 @@ final class TabEntries {
      * anything); "enemies" are those in another clan with no alliance, not everyone who is not an
      * ally.
      */
-    private boolean keep(Line l) {
-        return switch (filter()) {
+    private boolean keep(Line l, int filter) {
+        return switch (filter) {
             case 1 -> l.clan != null;
             case 2 -> l.relation == RelationLink.CLAN;
             case 3 -> l.relation == RelationLink.CLAN || l.relation == RelationLink.ALLY;
