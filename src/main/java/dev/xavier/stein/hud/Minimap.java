@@ -99,11 +99,14 @@ final class Minimap extends HudElement {
 
     @Override
     public boolean layout(boolean preview, float partialTicks) {
-        if (!preview && !ServerLimits.allows(ServerLimits.MINIMAP)) {
+        boolean allowed = ServerLimits.allows(ServerLimits.MINIMAP);
+        if (!preview && !allowed) {
             return false; // this server does not allow minimaps (the player's choice stays as is)
         }
-        self = Entities.self();
-        world = Terrain.current();
+        // In the grid editor the world keeps running behind it: where the server forbids the
+        // minimap, only the sample shows, or the editor would be a working minimap.
+        self = allowed ? Entities.self() : null;
+        world = allowed ? Terrain.current() : null;
         if ((self == null || world == null) && !preview) {
             return false;
         }
