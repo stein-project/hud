@@ -74,14 +74,17 @@ final class TargetHud extends HudElement {
 
     @Override
     public boolean layout(boolean preview, float partialTicks) {
-        if (!preview && !ServerLimits.allows(ServerLimits.TARGET)) {
+        boolean allowed = ServerLimits.allows(ServerLimits.TARGET);
+        if (!preview && !allowed) {
             target = null; // this server does not allow it: nothing shows, nothing is kept
             return false;
         }
         long now = System.nanoTime();
         float dt = lastFrame == 0 ? 0 : Math.min(0.1F, (now - lastFrame) / 1e9F);
         lastFrame = now;
-        Object next = tracker.choose(now);
+        // In the grid editor the game keeps running behind it: where the server forbids the
+        // target, only the sample shows, never a real player's data.
+        Object next = allowed ? tracker.choose(now) : null;
         if (next != target) {
             target = next;
             if (next != null) {
