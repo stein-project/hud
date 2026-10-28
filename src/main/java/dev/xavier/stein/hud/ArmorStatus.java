@@ -14,22 +14,55 @@ import dev.xavier.stein.loader.api.Option;
 import dev.xavier.stein.loader.api.Render;
 import dev.xavier.stein.loader.api.Stacks;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * Armor and the held item, with durability (what ArmorStatusHUD did): a horizontal or vertical
  * list, the item's name, the durability bar, how many of the held item there are (arrows for a
  * bow), durability as a value, "value/max" or a percentage, and colors by durability threshold
  * ({@link DamageColors}).
+ *
+ * <p>Drawn every frame, but its texts only change with the items: each entry keeps its text, count
+ * and width, built again only when its stack, the stack's damage or size, the settings or the
+ * inventory count changed. The count is a scan of the inventory by item identity, done at most once
+ * per tick or slot change ({@link SteinHud#inventoryEpoch}).
  */
 final class ArmorStatus extends HudElement {
 
+    /** Four armor pieces and the held item. */
+    private static final int MAX = 5;
+
     private final HudConfig.Armor c;
     private final DamageColors colors = new DamageColors();
-    private final List<Object> stacks = new ArrayList<>();
-    private final List<String> texts = new ArrayList<>();
-    private final List<String> counts = new ArrayList<>();
+
+    // The entries on screen, and what each one was built from.
+    private final Object[] stacks = new Object[MAX];
+    private final boolean[] armorOf = new boolean[MAX];
+    private final int[] damageOf = new int[MAX];
+    private final int[] sizeOf = new int[MAX];
+    private final int[] countOf = new int[MAX];
+    private final int[] inventoryOf = new int[MAX];
+    private final String[] texts = new String[MAX];
+    private final String[] counts = new String[MAX];
+    private final int[] widths = new int[MAX];
+    private int entries;
+
+    // What every entry depends on: when any of it changes, all are built again.
+    private Object builtSelf;
+    private int builtEpoch = -1;
+    private int builtFlags = -1;
+    private String builtDisplay;
+    private String builtThreshold;
+    private String builtColors;
+    private boolean rebuild;
+
+    /** The item {@link #sameKind} counts (set around each count, so the predicate is made once). */
+    private Object countKind;
+
+    private final Predicate<Object> sameKind = x -> Stacks.sameKind(x, countKind);
+    private Object bow;
+    private Object arrow;
     private Object[] previewArmor;
     private Object previewSword;
 
@@ -40,63 +73,116 @@ final class ArmorStatus extends HudElement {
 
     @Override
     public boolean layout(boolean preview, float partialTicks) {
-        stacks.clear();
-        texts.clear();
-        counts.clear();
         Object p = Entities.self();
-        int armorPieces = 0;
+        settings(p);
+        int n = 0;
         if (p != null) {
             for (int i = Inventory.HELMET; i >= Inventory.BOOTS; i--) {
                 Object piece = Inventory.armor(i);
                 if (piece != null) {
-                    add(p, piece, true);
-                    armorPieces++;
+                    put(n++, p, piece, true);
                 }
             }
         }
-        if (preview && armorPieces == 0) {
+        if (preview && n == 0) {
             for (Object s : previewArmor()) {
-                add(null, s, true);
+                put(n++, null, s, true);
             }
         }
         if (c.equippedItem) {
             Object held = p != null ? Inventory.heldItem() : null;
             if (held != null) {
-                add(p, held, false);
+                put(n++, p, held, false);
             } else if (preview) {
                 previewArmor();
-                add(null, previewSword, false);
+                put(n++, null, previewSword, false);
             }
         }
-        if (stacks.isEmpty()) {
+        for (int i = n; i < entries; i++) {
+            stacks[i] = null; // no old stack kept alive by the cache
+        }
+        entries = n;
+        if (n == 0) {
             return false;
         }
         if (c.horizontal) {
             int x = 0;
-            for (int i = 0; i < stacks.size(); i++) {
-                x += 16 + textWidth(i) + (i < stacks.size() - 1 ? 4 : 0);
+            for (int i = 0; i < n; i++) {
+                x += 16 + widths[i] + (i < n - 1 ? 4 : 0);
             }
             w = x;
             h = 16;
         } else {
             int text = 0;
-            for (int i = 0; i < stacks.size(); i++) {
-                text = Math.max(text, textWidth(i));
+            for (int i = 0; i < n; i++) {
+                text = Math.max(text, widths[i]);
             }
             w = 16 + text;
-            h = stacks.size() * 17 - 1;
+            h = n * 17 - 1;
         }
         return true;
     }
 
-    /** An entry's text width, with the gap after the icon; 0 without text. */
-    private int textWidth(int i) {
-        String t = texts.get(i);
-        return t.isEmpty() ? 0 : Render.textWidth(t) + 2;
+    /** Notes whether something every entry depends on changed since the last frame. */
+    private void settings(Object p) {
+        int flags =
+                (c.itemName ? 1 : 0)
+                        | (c.armorDamage ? 2 : 0)
+                        | (c.itemDamage ? 4 : 0)
+                        | (c.maxDamage ? 8 : 0)
+                        | (c.itemCount ? 16 : 0);
+        int epoch = textEpoch();
+        rebuild =
+                p != builtSelf
+                        || epoch != builtEpoch
+                        || flags != builtFlags
+                        || c.damageDisplay != builtDisplay
+                        || c.thresholdType != builtThreshold
+                        || c.damageColors != builtColors;
+        builtSelf = p;
+        builtEpoch = epoch;
+        builtFlags = flags;
+        builtDisplay = c.damageDisplay;
+        builtThreshold = c.thresholdType;
+        builtColors = c.damageColors;
     }
 
-    private void add(Object p, Object s, boolean armor) {
-        stacks.add(s);
+    /** Entry {@code i} is {@code s}: built again only if something it shows changed. */
+    private void put(int i, Object p, Object s, boolean armor) {
+        int damage = Stacks.damage(s);
+        int size = Stacks.count(s);
+        boolean same =
+                !rebuild
+                        && stacks[i] == s
+                        && armorOf[i] == armor
+                        && damageOf[i] == damage
+                        && sizeOf[i] == size;
+        if (same && (armor || inventoryOf[i] == inventoryEpoch())) {
+            return;
+        }
+        if (armor) {
+            counts[i] = "";
+        } else {
+            // The count may have changed (or the entry is new): count again; when only the count
+            // was due and it is the same, the entry stays as it is.
+            int count = count(p, s);
+            inventoryOf[i] = inventoryEpoch();
+            if (same && countOf[i] == count) {
+                return;
+            }
+            countOf[i] = count;
+            counts[i] = count < 0 ? "" : String.valueOf(count);
+        }
+        stacks[i] = s;
+        armorOf[i] = armor;
+        damageOf[i] = damage;
+        sizeOf[i] = size;
+        String t = text(s, armor, damage);
+        texts[i] = t;
+        widths[i] = t.isEmpty() ? 0 : Render.textWidth(t) + 2;
+    }
+
+    private String text(Object s, boolean armor, int damage) {
         StringBuilder t = new StringBuilder();
         if (c.itemName) {
             t.append(Stacks.name(s));
@@ -105,7 +191,7 @@ final class ArmorStatus extends HudElement {
                 && (armor ? c.armorDamage : c.itemDamage)
                 && !"none".equals(c.damageDisplay)) {
             int max = Stacks.maxDamage(s);
-            int left = max - Stacks.damage(s);
+            int left = max - damage;
             int percent = max > 0 ? left * 100 / max : 0;
             String d =
                     "percent".equals(c.damageDisplay)
@@ -117,28 +203,50 @@ final class ArmorStatus extends HudElement {
             int value = "percent".equals(c.thresholdType) ? percent : left;
             t.append(Option.fmt(colors.of(c.damageColors, value))).append(d);
         }
-        texts.add(t.toString());
-        counts.add(armor ? "" : count(p, s));
+        return t.toString();
     }
 
-    /** How many of the held item are in the inventory; for a bow, the arrows. */
-    private String count(Object p, Object s) {
+    /**
+     * How many of the held item are in the inventory (for a bow, the arrows); -1 when nothing is
+     * shown. Compared by item identity ({@link Stacks#sameKind}), not by name.
+     */
+    private int count(Object p, Object s) {
         if (!c.itemCount) {
-            return "";
+            return -1;
         }
-        boolean bow = Stacks.is(s, "bow");
+        boolean isBow = isBow(s);
         if (p == null) {
-            return bow ? "64" : "";
+            return isBow ? 64 : -1;
         }
         int n;
-        if (bow) {
-            n = Inventory.count(x -> Stacks.is(x, "arrow"));
+        if (isBow) {
+            if (arrow == null) {
+                return -1; // no arrow item to count: does not happen in the game
+            }
+            n = countOf(arrow);
         } else if (Stacks.maxCount(s) > 1) {
-            n = Inventory.count(x -> Stacks.sameKind(x, s));
+            n = countOf(s);
         } else {
-            return "";
+            return -1;
         }
-        return bow || n > 1 ? String.valueOf(n) : "";
+        return isBow || n > 1 ? n : -1;
+    }
+
+    private boolean isBow(Object s) {
+        if (bow == null) {
+            bow = Stacks.create("bow", 1, 0);
+            arrow = Stacks.create("arrow", 1, 0);
+        }
+        return bow != null ? Stacks.sameKind(s, bow) : Stacks.is(s, "bow");
+    }
+
+    private int countOf(Object kind) {
+        countKind = kind;
+        try {
+            return Inventory.count(sameKind);
+        } finally {
+            countKind = null;
+        }
     }
 
     private Object[] previewArmor() {
@@ -159,23 +267,22 @@ final class ArmorStatus extends HudElement {
     void draw(boolean alignRight) {
         if (c.horizontal) {
             int x = 0;
-            for (int i = 0; i < stacks.size(); i++) {
-                Render.item(stacks.get(i), x, 0, c.damageOverlay, counts.get(i));
-                String t = texts.get(i);
+            for (int i = 0; i < entries; i++) {
+                Render.item(stacks[i], x, 0, c.damageOverlay, counts[i]);
+                String t = texts[i];
                 if (!t.isEmpty()) {
                     Render.text(t, x + 18, 4, 0xFFFFFF, true);
                 }
-                x += 16 + textWidth(i) + 4;
+                x += 16 + widths[i] + 4;
             }
             return;
         }
-        for (int i = 0; i < stacks.size(); i++) {
+        for (int i = 0; i < entries; i++) {
             int y = i * 17;
-            String t = texts.get(i);
-            Render.item(stacks.get(i), alignRight ? w - 16 : 0, y, c.damageOverlay, counts.get(i));
+            String t = texts[i];
+            Render.item(stacks[i], alignRight ? w - 16 : 0, y, c.damageOverlay, counts[i]);
             if (!t.isEmpty()) {
-                Render.text(
-                        t, alignRight ? w - 18 - Render.textWidth(t) : 18, y + 4, 0xFFFFFF, true);
+                Render.text(t, alignRight ? w - 16 - widths[i] : 18, y + 4, 0xFFFFFF, true);
             }
         }
     }

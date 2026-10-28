@@ -38,9 +38,21 @@ final class Direction extends HudElement {
 
     private static final int STRIP_H = 20;
 
+    /** "0°" to "360°", made once: the degrees under the strip changed every frame. */
+    private static final String[] DEGREES = new String[361];
+
     private final HudConfig.Compass c;
     private float bearing;
     private String text;
+
+    // The text style's line and the strip's label widths, kept with what they were built from.
+    private int textWidth;
+    private int textDegrees = -1;
+    private int textLabel = -1;
+    private String textColor;
+    private int textBuiltEpoch = -1;
+    private final int[] labelWidths = new int[LABELS.length];
+    private int labelEpoch = -1;
 
     Direction(HudConfig.Compass c, SteinHud mod) {
         super("direction", c, mod);
@@ -61,13 +73,21 @@ final class Direction extends HudElement {
         // The game's yaw: 0 = south, 90 = west. The compass bearing: 0 = north, 90 = east.
         bearing = ((yaw + 180.0F) % 360.0F + 360.0F) % 360.0F;
         if (c.style == 2) {
-            text =
-                    Option.fmt(c.markerColor)
-                            + LABELS[Math.round(bearing / 45.0F) % 8]
-                            + "§f "
-                            + (int) bearing
-                            + "°";
-            w = Render.textWidth(text) + 6;
+            int degrees = (int) bearing;
+            int label = Math.round(bearing / 45.0F) % 8;
+            int epoch = textEpoch();
+            if (degrees != textDegrees
+                    || label != textLabel
+                    || c.markerColor != textColor
+                    || epoch != textBuiltEpoch) {
+                text = Option.fmt(c.markerColor) + LABELS[label] + "§f " + degrees(degrees);
+                textWidth = Render.textWidth(text);
+                textDegrees = degrees;
+                textLabel = label;
+                textColor = c.markerColor;
+                textBuiltEpoch = epoch;
+            }
+            w = textWidth + 6;
             h = 12;
         } else {
             w = STRIP_W;
@@ -100,7 +120,7 @@ final class Direction extends HudElement {
                     major ? 0xFFFFFFFF : 0x90FFFFFF);
             if (major) {
                 String label = LABELS[a / 45];
-                int lw = Render.textWidth(label);
+                int lw = labelWidth(a / 45);
                 int lx = px - lw / 2;
                 if (lx >= 1 && lx + lw <= STRIP_W - 1) {
                     Render.text(label, lx, 2, a % 90 == 0 ? 0xFFFFFF : 0xAAAAAA, true);
@@ -111,9 +131,34 @@ final class Direction extends HudElement {
         Render.rect(cx, STRIP_H - 9, 1, 9, marker);
         Render.rect(cx - 1, STRIP_H - 2, 3, 2, marker);
         if (c.style == 3) {
-            String d = (int) bearing + "°";
+            String d = degrees((int) bearing);
             Render.text(d, cx - Render.textWidth(d) / 2, STRIP_H + 2, 0xFFFFFF, true);
         }
+    }
+
+    /** "N°", for 0 to 360. */
+    private static String degrees(int d) {
+        if (d < 0 || d >= DEGREES.length) {
+            return d + "°";
+        }
+        String s = DEGREES[d];
+        if (s == null) {
+            s = d + "°";
+            DEGREES[d] = s;
+        }
+        return s;
+    }
+
+    /** The width of a cardinal label, measured again when the font may have changed. */
+    private int labelWidth(int i) {
+        int epoch = textEpoch();
+        if (epoch != labelEpoch) {
+            for (int j = 0; j < LABELS.length; j++) {
+                labelWidths[j] = Render.textWidth(LABELS[j]);
+            }
+            labelEpoch = epoch;
+        }
+        return labelWidths[i];
     }
 
     /** The angle between -180 and 180 (the game's wrapAngleTo180). */

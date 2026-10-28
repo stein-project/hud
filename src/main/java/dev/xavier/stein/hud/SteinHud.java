@@ -46,6 +46,21 @@ public final class SteinHud implements SteinMod {
     /** Whether this frame's Tab list has a scoreboard objective. */
     private boolean pendingObjective;
 
+    /**
+     * Changes when the elements' cached texts may be stale: a resource reload (the language, whose
+     * names they hold) and once a second (the HUD font can be switched in the Loader's menu, and
+     * the widths come from it).
+     */
+    int textEpoch;
+
+    /**
+     * Changes when the inventory may have changed: every tick (the client itself uses up arrows,
+     * blocks and food) and on every slot the server sends, which can land between two ticks.
+     */
+    int inventoryEpoch;
+
+    private int ticks;
+
     Log log() {
         return log;
     }
@@ -53,9 +68,28 @@ public final class SteinHud implements SteinMod {
     /** A new resource pack: the minimap takes its colors again. */
     @Override
     public void onModelsReloaded() {
+        textEpoch++;
         if (minimap != null) {
             minimap.resourcesReloaded();
         }
+    }
+
+    @Override
+    public void onTickEnd() {
+        inventoryEpoch++;
+        if (++ticks % 20 == 0) {
+            textEpoch++;
+        }
+    }
+
+    @Override
+    public void onSlotChanged(int windowId, int slot, Object stack) {
+        inventoryEpoch++;
+    }
+
+    @Override
+    public void onWindowItems(int windowId) {
+        inventoryEpoch++;
     }
 
     /** A hit of yours on a player: the target element shows them. */

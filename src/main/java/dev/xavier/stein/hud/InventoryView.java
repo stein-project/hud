@@ -10,6 +10,7 @@ package dev.xavier.stein.hud;
 
 import dev.xavier.stein.loader.api.Entities;
 import dev.xavier.stein.loader.api.Inventory;
+import dev.xavier.stein.loader.api.Mesh;
 import dev.xavier.stein.loader.api.Option;
 import dev.xavier.stein.loader.api.Render;
 import dev.xavier.stein.loader.api.Stacks;
@@ -33,6 +34,14 @@ final class InventoryView extends HudElement {
     private final Object[] inventory = new Object[Inventory.ARMOR_START];
     private int rows;
     private Object[] sample;
+
+    /** Every slot's background as one mesh (one draw instead of up to 36), for {@link #rows}. */
+    private Mesh slots;
+
+    private int slotsRows;
+
+    /** "2" to "64", made once: the counts were turned into text for every item every frame. */
+    private static final String[] COUNTS = new String[65];
 
     InventoryView(HudConfig.Inventory c, SteinHud mod) {
         super("inventory", c, mod);
@@ -77,24 +86,60 @@ final class InventoryView extends HudElement {
 
     @Override
     void draw(boolean alignRight) {
+        if (c.background) {
+            Render.mesh(slots());
+        }
         for (int i = 0; i < rows * 9; i++) {
-            int x = (i % 9) * SLOT;
-            int y = (i / 9) * SLOT + (i >= 27 ? HOTBAR_GAP : 0);
-            if (c.background) {
-                Render.rect(x + 1, y + 1, 16, 16, 0x30FFFFFF);
-            }
             Object s = shown[i];
             if (s != null) {
+                int x = (i % 9) * SLOT;
+                int y = (i / 9) * SLOT + (i >= 27 ? HOTBAR_GAP : 0);
                 // With the bar, the inventory's own drawing puts the count (null) or nothing ("").
                 String count =
                         c.durability
                                 ? (c.count ? null : "")
-                                : c.count && Stacks.count(s) > 1
-                                        ? String.valueOf(Stacks.count(s))
-                                        : "";
+                                : c.count ? count(Stacks.count(s)) : "";
                 Render.item(s, x + 1, y + 1, c.durability, count);
             }
         }
+    }
+
+    /** The slot backgrounds for the current rows, built when the rows change. */
+    private Mesh slots() {
+        if (slots == null || slotsRows != rows) {
+            if (slots != null) {
+                slots.release();
+            }
+            Mesh.Builder b = Mesh.builder(Mesh.Primitive.QUADS, Mesh.Format.COLOR);
+            for (int i = 0; i < rows * 9; i++) {
+                int x = (i % 9) * SLOT + 1;
+                int y = (i / 9) * SLOT + (i >= 27 ? HOTBAR_GAP : 0) + 1;
+                // The same corners, in the same order, as Render.rect.
+                b.vertex(x, y + 16, 0).color(0x30FFFFFF);
+                b.vertex(x + 16, y + 16, 0).color(0x30FFFFFF);
+                b.vertex(x + 16, y, 0).color(0x30FFFFFF);
+                b.vertex(x, y, 0).color(0x30FFFFFF);
+            }
+            slots = b.build();
+            slotsRows = rows;
+        }
+        return slots;
+    }
+
+    /** A stack's count as the inventory writes it: nothing for one. */
+    private static String count(int n) {
+        if (n <= 1) {
+            return "";
+        }
+        if (n >= COUNTS.length) {
+            return String.valueOf(n);
+        }
+        String s = COUNTS[n];
+        if (s == null) {
+            s = String.valueOf(n);
+            COUNTS[n] = s;
+        }
+        return s;
     }
 
     /** A sample for the editor outside a world. */

@@ -16,6 +16,7 @@ import dev.xavier.stein.loader.api.Screens;
 import dev.xavier.stein.loader.api.Server;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -65,6 +66,22 @@ final class StatsBlock extends HudElement {
      */
     private int target = 60;
 
+    /** How many numbers {@link #key} holds. */
+    private static final int KEYS = 14;
+
+    // The numbers and settings the lines were built from (key: this frame's; builtKey: the lines').
+    private final int[] key = new int[KEYS];
+    private final int[] builtKey = new int[KEYS];
+    private String builtColor;
+    private boolean built;
+    private int[] lineWidths = new int[12];
+
+    // The computer's memory, sampled once a second (ramSample counts the samples).
+    private long ramUsed = -1;
+    private long ramTotal = -1;
+    private int ramSample;
+    private boolean ramSampled;
+
     StatsBlock(HudConfig.Stats c, SteinHud mod) {
         super("stats", c, mod);
         this.c = c;
@@ -96,16 +113,90 @@ final class StatsBlock extends HudElement {
             }
             paused = pause;
         }
-        if (now - next >= 0) {
+        boolean second = now - next >= 0;
+        if (second) {
             next = now + SECOND;
             low = frames.low();
             worst = frames.worst();
             target = target();
         }
+        // The RAM is a call into Windows: once a second, with the other numbers, and at once when
+        // it is turned on.
+        if (c.ram == 0) {
+            ramSampled = false;
+        } else if (second || !ramSampled) {
+            sampleRam();
+        }
+        int fps = c.fps ? Game.fps() : 0;
+        int ping = c.ping ? ping() : 0;
+        if (ping < 0 && preview) {
+            ping = 42;
+        }
+        int cpu = c.cpu ? percentOf(sensors.cpu()) : 0;
+        int gpu = c.gpu ? percentOf(sensors.gpu()) : 0;
+        int cpsLeft = c.cps > 0 ? left.count(now) : 0;
+        int cpsRight = c.cps == 2 ? right.count(now) : 0;
+        // The lines change a few times a second at most: built again only when a number in them
+        // (or a setting) changed, instead of formatting and measuring them every frame.
+        int[] k = key;
+        k[0] = fps;
+        k[1] = low;
+        k[2] = Float.floatToIntBits(worst);
+        k[3] = target;
+        k[4] = ping;
+        k[5] = cpu;
+        k[6] = gpu;
+        k[7] = ramSample;
+        k[8] = cpsLeft;
+        k[9] = cpsRight;
+        k[10] =
+                (c.fps ? 1 : 0)
+                        | (c.low ? 2 : 0)
+                        | (c.worst ? 4 : 0)
+                        | (c.ping ? 8 : 0)
+                        | (c.cpu ? 16 : 0)
+                        | (c.gpu ? 32 : 0)
+                        | (c.ram != 0 ? 64 : 0)
+                        | (c.horizontal ? 128 : 0)
+                        | (c.colorByValue ? 256 : 0)
+                        | (preview ? 512 : 0);
+        k[11] = c.style;
+        k[12] = c.cps;
+        k[13] = textEpoch();
+        if (built && c.color == builtColor && Arrays.equals(k, builtKey)) {
+            return !lines.isEmpty();
+        }
+        System.arraycopy(k, 0, builtKey, 0, KEYS);
+        builtColor = c.color;
+        built = true;
+        build(preview, fps, ping, cpu, gpu, cpsLeft, cpsRight);
+        if (lines.isEmpty()) {
+            return false;
+        }
+        if (c.horizontal) {
+            String all = String.join("   ", lines);
+            lines.clear();
+            lines.add(all);
+        }
+        if (lineWidths.length < lines.size()) {
+            lineWidths = new int[lines.size()];
+        }
+        int max = 0;
+        for (int i = 0; i < lines.size(); i++) {
+            lineWidths[i] = Render.textWidth(lines.get(i));
+            max = Math.max(max, lineWidths[i]);
+        }
+        w = max + 6;
+        h = c.horizontal ? 12 : lines.size() * LINE + 2;
+        return true;
+    }
+
+    /** The lines, from this frame's numbers. */
+    private void build(
+            boolean preview, int fps, int ping, int cpu, int gpu, int cpsLeft, int cpsRight) {
         lines.clear();
         String label = Option.fmt(c.color);
         if (c.fps) {
-            int fps = Game.fps();
             lines.add(line(label, "FPS", fpsColor(fps) + fps));
         }
         if (c.low) {
@@ -119,52 +210,41 @@ final class StatsBlock extends HudElement {
                             T.tr("stats.worstShort"),
                             ms < 0 ? label + "--" : worstColor(ms) + fmtMs(ms)));
         }
-        if (c.ping) {
-            int ping = ping();
-            if (ping < 0 && preview) {
-                ping = 42;
-            }
-            if (ping >= 0) {
-                String v =
-                        (c.colorByValue
-                                        ? Option.fmt(ping <= 80 ? "a" : ping <= 150 ? "e" : "c")
-                                        : label)
-                                + ping
-                                + " ms";
-                lines.add(line(label, "Ping", v));
-            }
+        if (c.ping && ping >= 0) {
+            String v =
+                    (c.colorByValue
+                                    ? Option.fmt(ping <= 80 ? "a" : ping <= 150 ? "e" : "c")
+                                    : label)
+                            + ping
+                            + " ms";
+            lines.add(line(label, "Ping", v));
         }
         if (c.cpu) {
-            lines.add(line(label, "CPU", percent(sensors.cpu(), label)));
+            lines.add(line(label, "CPU", percent(cpu, label)));
         }
         if (c.gpu) {
-            lines.add(line(label, "GPU", percent(sensors.gpu(), label)));
+            lines.add(line(label, "GPU", percent(gpu, label)));
         }
         if (c.ram != 0) {
             lines.add(line(label, "RAM", ram(label)));
         }
         if (c.cps > 0) {
-            String v = left.count(now) + (c.cps == 2 ? " | " + right.count(now) : "");
+            String v = cpsLeft + (c.cps == 2 ? " | " + cpsRight : "");
             lines.add(line(label, "CPS", label + v));
         }
-        if (lines.isEmpty()) {
-            return false;
+    }
+
+    private void sampleRam() {
+        long[] m = sensors.systemMemory();
+        if (m == null || m[1] <= 0) {
+            ramUsed = -1;
+            ramTotal = -1;
+        } else {
+            ramUsed = m[0];
+            ramTotal = m[1];
         }
-        if (c.horizontal) {
-            String all = String.join("   ", lines);
-            lines.clear();
-            lines.add(all);
-            w = Render.textWidth(all) + 6;
-            h = 12;
-            return true;
-        }
-        int max = 0;
-        for (String s : lines) {
-            max = Math.max(max, Render.textWidth(s));
-        }
-        w = max + 6;
-        h = lines.size() * LINE + 2;
-        return true;
+        ramSample++;
+        ramSampled = true;
     }
 
     private String line(String label, String name, String value) {
@@ -210,25 +290,28 @@ final class StatsBlock extends HudElement {
         return T.num(String.format(Locale.ROOT, "%.1f", ms)) + " ms";
     }
 
+    /** A usage as the whole percent shown; -1 without a measure. */
+    private static int percentOf(double v) {
+        return v < 0 ? -1 : (int) Math.round(v);
+    }
+
     /** Usage in percent, green up to 70, yellow up to 90, red above; "--" without a measure. */
-    private String percent(double v, String label) {
-        if (v < 0) {
+    private String percent(int p, String label) {
+        if (p < 0) {
             return label + "--";
         }
-        int p = (int) Math.round(v);
         return (c.colorByValue ? Option.fmt(p < 70 ? "a" : p < 90 ? "e" : "c") : label) + p + "%";
     }
 
     /** The computer's RAM in use and total, in GB; "--" without the information. */
     private String ram(String label) {
-        long[] m = sensors.systemMemory();
-        if (m == null || m[1] <= 0) {
+        if (ramTotal <= 0) {
             return label + "--";
         }
-        int p = (int) Math.min(100, m[0] * 100 / m[1]);
+        int p = (int) Math.min(100, ramUsed * 100 / ramTotal);
         String color = c.colorByValue ? Option.fmt(p < 70 ? "a" : p < 90 ? "e" : "c") : label;
         double g = 1024.0 * 1024 * 1024;
-        return color + T.num(String.format(Locale.ROOT, "%.1f/%.1f GB", m[0] / g, m[1] / g));
+        return color + T.num(String.format(Locale.ROOT, "%.1f/%.1f GB", ramUsed / g, ramTotal / g));
     }
 
     /**
@@ -252,7 +335,7 @@ final class StatsBlock extends HudElement {
     void draw(boolean alignRight) {
         for (int i = 0; i < lines.size(); i++) {
             String s = lines.get(i);
-            int x = alignRight ? w - 3 - Render.textWidth(s) : 3;
+            int x = alignRight ? w - 3 - lineWidths[i] : 3;
             Render.text(s, x, 2 + i * LINE, 0xFFFFFF, true);
         }
     }

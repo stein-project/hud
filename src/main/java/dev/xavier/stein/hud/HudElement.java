@@ -63,6 +63,16 @@ abstract class HudElement implements dev.xavier.stein.loader.api.HudElement {
         return mod.log();
     }
 
+    /** See {@link SteinHud#textEpoch}. */
+    final int textEpoch() {
+        return mod.textEpoch;
+    }
+
+    /** See {@link SteinHud#inventoryEpoch}. */
+    final int inventoryEpoch() {
+        return mod.inventoryEpoch;
+    }
+
     @Override
     public final String id() {
         return id;
