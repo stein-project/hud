@@ -16,6 +16,7 @@ import dev.xavier.stein.loader.api.Stacks;
 
 import net.minecraft.entity.EntityLivingBase;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
@@ -60,6 +61,28 @@ final class TargetHud extends HudElement {
     private float absorption;
     private float distance;
     private String loggedDamage = "";
+    private Object[] sample;
+
+    // The texts, kept with what they were built from: they change a few times a second at most,
+    // and used to be formatted (String.format) and measured twice every frame.
+    private String title = "";
+    private int titleWidth;
+    private String titleNick;
+    private int titleFlags = -1;
+    private long titleTenths = Long.MIN_VALUE;
+    private int titleEpoch = -1;
+    private String hp = "";
+    private String hpRed = "";
+    private int hpWidth;
+    private long hpTenths = Long.MIN_VALUE;
+    private long hpAbsorption = Long.MIN_VALUE;
+    private int hpEpoch = -1;
+    private final Object[] durStack = new Object[5];
+    private final int[] durDamage = new int[5];
+    private final String[] durText = new String[5];
+    private final int[] durWidth = new int[5];
+    private String durSetting;
+    private int durEpoch = -1;
 
     TargetHud(HudConfig.Target c, SteinHud mod) {
         super("target", c, mod);
@@ -123,7 +146,7 @@ final class TargetHud extends HudElement {
                             : approach(trailHealth, shownHealth, dt * 6);
         }
         int right = Math.max(c.healthBar ? BAR_W : 0, itemCount * 18 - 2);
-        right = Math.max(right, Render.textWidth(title()));
+        right = Math.max(right, updateTitle());
         w = (c.head ? HEAD + 4 : 0) + right;
         h = Math.max(c.head ? HEAD : 0, lines());
         return true;
@@ -137,14 +160,14 @@ final class TargetHud extends HudElement {
             maxHealth = 20;
             absorption = 4;
             distance = 3.2F;
+            Object[] s = sample();
             if (c.armor) {
-                items[itemCount++] = Stacks.create("diamond_helmet", 1, 120);
-                items[itemCount++] = Stacks.create("diamond_chestplate", 1, 300);
-                items[itemCount++] = Stacks.create("iron_leggings", 1, 40);
-                items[itemCount++] = Stacks.create("diamond_boots", 1, 410);
+                for (int i = 0; i < 4; i++) {
+                    items[itemCount++] = s[i];
+                }
             }
             if (c.held) {
-                items[itemCount++] = Stacks.create("diamond_sword", 1, 700);
+                items[itemCount++] = s[4];
             }
             return;
         }
@@ -185,6 +208,43 @@ final class TargetHud extends HudElement {
             log().info("target " + drawnNick + " wear: " + now);
             loggedDamage = now;
         }
+    }
+
+    /** The editor's sample items, made once. */
+    private Object[] sample() {
+        if (sample == null) {
+            sample =
+                    new Object[] {
+                        Stacks.create("diamond_helmet", 1, 120),
+                        Stacks.create("diamond_chestplate", 1, 300),
+                        Stacks.create("iron_leggings", 1, 40),
+                        Stacks.create("diamond_boots", 1, 410),
+                        Stacks.create("diamond_sword", 1, 700),
+                    };
+        }
+        return sample;
+    }
+
+    /**
+     * Builds the title again if the nick, the shown tenth of a metre or the settings changed;
+     * returns its width.
+     */
+    private int updateTitle() {
+        int flags = (c.name ? 1 : 0) | (c.distance ? 2 : 0);
+        long tenths = c.distance ? Math.round(distance * 10.0) : 0;
+        int epoch = textEpoch();
+        if (drawnNick != titleNick
+                || flags != titleFlags
+                || tenths != titleTenths
+                || epoch != titleEpoch) {
+            title = title();
+            titleWidth = Render.textWidth(title);
+            titleNick = drawnNick;
+            titleFlags = flags;
+            titleTenths = tenths;
+            titleEpoch = epoch;
+        }
+        return titleWidth;
     }
 
     private String title() {
@@ -236,7 +296,6 @@ final class TargetHud extends HudElement {
             }
         }
         int y = 0;
-        String title = title();
         if (!title.isEmpty()) {
             int color = c.name ? RelationLink.color(drawnNick) : 0xFFFFFF;
             Render.text(title, x, y + 1, Render.alpha(0xFF000000 | color, a), true);
@@ -255,10 +314,10 @@ final class TargetHud extends HudElement {
             int ix = x + i * 18;
             Object s = items[i];
             Render.item(s, ix, y, c.durabilityBar);
-            String d = durability(s);
+            String d = durability(i, s);
             if (!d.isEmpty()) {
                 Render.push();
-                Render.translate(ix + 8 - Render.textWidth(d) * 0.25F, y + 17);
+                Render.translate(ix + 8 - durWidth[i] * 0.25F, y + 17);
                 Render.scale(0.5F);
                 Render.text(d, 0, 0, Render.alpha(0xFFFFFFFF, a), true);
                 Render.pop();
@@ -268,20 +327,31 @@ final class TargetHud extends HudElement {
     }
 
     private void healthText(int x, int y, float a) {
-        String hp =
-                T.num(String.format(Locale.ROOT, "%.1f", health))
-                        + (absorption > 0
-                                ? " §e+" + String.format(Locale.ROOT, "%.0f", absorption)
-                                : "");
+        // Built again only when the shown tenth of health or whole absorption changes.
+        long tenths = Math.round(health * 10.0);
+        long whole = absorption > 0 ? Math.round((double) absorption) : -1;
+        int epoch = textEpoch();
+        if (tenths != hpTenths || whole != hpAbsorption || epoch != hpEpoch) {
+            hp =
+                    T.num(String.format(Locale.ROOT, "%.1f", health))
+                            + (absorption > 0
+                                    ? " §e+" + String.format(Locale.ROOT, "%.0f", absorption)
+                                    : "");
+            hpRed = "§c" + hp;
+            hpWidth = Render.textWidth(hp);
+            hpTenths = tenths;
+            hpAbsorption = whole;
+            hpEpoch = epoch;
+        }
         if (c.healthBar) {
             // Small, inside the bar, against the right.
             Render.push();
-            Render.translate(x + BAR_W - Render.textWidth(hp) * 0.5F - 1, y + 1);
+            Render.translate(x + BAR_W - hpWidth * 0.5F - 1, y + 1);
             Render.scale(0.5F);
             Render.text(hp, 0, 0, Render.alpha(0xFFFFFFFF, a), true);
             Render.pop();
         } else {
-            Render.text("§c" + hp, x, y + 1, Render.alpha(0xFFFFFFFF, a), true);
+            Render.text(hpRed, x, y + 1, Render.alpha(0xFFFFFFFF, a), true);
         }
     }
 
@@ -305,6 +375,25 @@ final class TargetHud extends HudElement {
         if (abs > 0) {
             Render.rect(x + BAR_W * life, y, BAR_W * abs, 6, Render.alpha(0xFFE8B020, a));
         }
+    }
+
+    /** Item {@code i}'s durability text, built again only when its stack or damage changes. */
+    private String durability(int i, Object s) {
+        int epoch = textEpoch();
+        if (c.durability != durSetting || epoch != durEpoch) {
+            Arrays.fill(durStack, null);
+            durSetting = c.durability;
+            durEpoch = epoch;
+        }
+        int damage = Stacks.damage(s);
+        if (durStack[i] != s || durDamage[i] != damage) {
+            String d = durability(s);
+            durText[i] = d;
+            durWidth[i] = d.isEmpty() ? 0 : Render.textWidth(d);
+            durStack[i] = s;
+            durDamage[i] = damage;
+        }
+        return durText[i];
     }
 
     private String durability(Object s) {

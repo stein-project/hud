@@ -14,11 +14,16 @@ import dev.xavier.stein.loader.api.Option;
 import dev.xavier.stein.loader.api.Render;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
  * Active effects (what StatusEffectHUD did): icon, name with level, duration, name and duration
  * colors, icon and duration blinking in the last seconds, and taking the list out of the inventory.
+ *
+ * <p>Each row keeps its texts and widths: the name is translated again only when the effect or its
+ * level changes, the duration once a second (it is written in whole seconds), and both when the
+ * colors or the language change.
  */
 final class StatusEffects extends HudElement {
 
@@ -30,6 +35,20 @@ final class StatusEffects extends HudElement {
     private boolean showingPreview;
 
     private int rowH;
+
+    // Per row: what its texts were built from, the texts (with their colors) and their widths.
+    private int[] rowId = new int[0];
+    private int[] rowLevel = new int[0];
+    private int[] rowSeconds = new int[0];
+    private String[] rowName = new String[0];
+    private String[] rowDuration = new String[0];
+    private int[] rowNameW = new int[0];
+    private int[] rowDurationW = new int[0];
+
+    // What every row depends on.
+    private int builtEpoch = -1;
+    private String builtNameColor;
+    private String builtDurationColor;
 
     StatusEffects(HudConfig.Effects c, SteinHud mod) {
         super("effects", c, mod);
@@ -50,17 +69,64 @@ final class StatusEffects extends HudElement {
         if (list.isEmpty()) {
             return false;
         }
+        boolean all = rowsStale();
         int text = 0;
-        for (Effects.Effect e : list) {
+        for (int i = 0; i < list.size(); i++) {
+            row(i, list.get(i), all);
             if (c.effectName) {
-                text = Math.max(text, Render.textWidth(Effects.name(e)));
+                text = Math.max(text, rowNameW[i]);
             }
-            text = Math.max(text, Render.textWidth(Effects.durationText(e)));
+            text = Math.max(text, rowDurationW[i]);
         }
         w = 20 + text;
         rowH = 20;
         h = list.size() * rowH - 2;
         return true;
+    }
+
+    /** True when every row must be built again (colors, language, font); makes room for them. */
+    private boolean rowsStale() {
+        int n = list.size();
+        if (rowId.length < n) {
+            int size = Math.max(n, 8);
+            rowId = Arrays.copyOf(rowId, size);
+            rowLevel = Arrays.copyOf(rowLevel, size);
+            rowSeconds = Arrays.copyOf(rowSeconds, size);
+            rowName = Arrays.copyOf(rowName, size);
+            rowDuration = Arrays.copyOf(rowDuration, size);
+            rowNameW = Arrays.copyOf(rowNameW, size);
+            rowDurationW = Arrays.copyOf(rowDurationW, size);
+            builtEpoch = -1; // the new rows have nothing yet
+        }
+        int epoch = textEpoch();
+        boolean stale =
+                epoch != builtEpoch
+                        || c.nameColor != builtNameColor
+                        || c.durationColor != builtDurationColor;
+        builtEpoch = epoch;
+        builtNameColor = c.nameColor;
+        builtDurationColor = c.durationColor;
+        return stale;
+    }
+
+    /** Row {@code i} shows {@code e}: its texts built again only where they changed. */
+    private void row(int i, Effects.Effect e, boolean all) {
+        if (all || rowName[i] == null || rowId[i] != e.id || rowLevel[i] != e.amplifier) {
+            String name = Effects.name(e);
+            rowName[i] = Option.fmt(c.nameColor) + name;
+            rowNameW[i] = Render.textWidth(name);
+            rowId[i] = e.id;
+            rowLevel[i] = e.amplifier;
+            all = true; // another effect in this row: its duration too
+        }
+        // The duration is written in whole seconds; -1 for an endless one.
+        int seconds = e.permanent ? -1 : e.duration / 20;
+        if (all || rowDuration[i] == null || rowSeconds[i] != seconds) {
+            String duration = Effects.durationText(e);
+            rowDuration[i] = Option.fmt(c.durationColor) + duration;
+            rowDurationW[i] = Render.textWidth(duration);
+            rowSeconds[i] = seconds;
+        }
     }
 
     private List<Effects.Effect> preview() {
@@ -86,8 +152,7 @@ final class StatusEffects extends HudElement {
                             && (showingPreview
                                     ? System.currentTimeMillis() / 500L % 2 == 0
                                     : (left / 10) % 2 == 0);
-            String name = c.effectName ? Option.fmt(c.nameColor) + Effects.name(e) : null;
-            String duration = Option.fmt(c.durationColor) + Effects.durationText(e);
+            String name = c.effectName ? rowName[i] : null;
 
             int iconX = alignRight ? w - 18 : 0;
             if (!(c.iconBlink && off)) {
@@ -95,18 +160,13 @@ final class StatusEffects extends HudElement {
             }
             int textLine = name != null ? y + 1 : y + 5;
             if (name != null) {
-                Render.text(
-                        name,
-                        alignRight ? w - 20 - Render.textWidth(name) : 20,
-                        textLine,
-                        0xFFFFFF,
-                        true);
+                Render.text(name, alignRight ? w - 20 - rowNameW[i] : 20, textLine, 0xFFFFFF, true);
             }
             if (!off) {
                 int dy = name != null ? y + 10 : textLine;
                 Render.text(
-                        duration,
-                        alignRight ? w - 20 - Render.textWidth(duration) : 20,
+                        rowDuration[i],
+                        alignRight ? w - 20 - rowDurationW[i] : 20,
                         dy,
                         0xFFFFFF,
                         true);
