@@ -1,17 +1,13 @@
 # HUD
 
-A [Stein Loader](https://github.com/Stein-Project) mod for Minecraft 1.8.9: a customizable HUD, a minimap and a
+A [Stein Loader](https://github.com/Stein-Project) mod for Minecraft 1.8.9: a customizable HUD and a
 better Tab list.
 
 - **Elements on the HUD grid**: armor and held item with durability, potion effects, a compass, performance (FPS,
-  1% low, worst frame, ping, CPU, GPU, RAM and CPS), the inventory, a minimap and your current target (head, name,
-  distance, health, armor and held item). Move, resize and turn each one on or off on the grid (Right Shift), where
+  1% low, worst frame, ping, CPU, GPU, RAM and CPS), and the inventory. Move, resize and turn each one on or off on the grid (Right Shift), where
   each element also has its own options.
-- **Minimap**: detailed or simple terrain, or radar only; square or round, turning with you or north up; players,
-  monsters, animals and spawners, with relation colors (allies, enemies, your clan) when a mod that marks
-  them provides them; caves in the Nether and underground.
-- **Tab list**: the server's, or ours: ping as bars, number or both, heads, distance, up to 500 players instead of
-  80, filters (with clan, my clan, allies, enemies, nearby), sorting (ping, name, distance) and groups (by clan or by
+- **Tab list**: the server's, or ours: ping as bars, number or both, heads, up to 500 players instead of
+  80, filters (with clan, my clan, allies, enemies), sorting (ping, name) and groups (by clan or by
   relation). Set it up on the Panel (Right Shift) > HUD.
 
 The settings are kept in `config/steinhud.json`; each element's place on the grid is kept by the Loader.
@@ -49,7 +45,7 @@ request asks you to sign the [CLA](https://github.com/Stein-Project/.github/blob
 mod, also check that:
 
 - an existing `config/steinhud.json` still loads: its JSON keys (the fields of `HudConfig` and `TabConfig`) are
-  what players already have, and so are the element ids (`steinhud.armor`, `steinhud.minimap`...) under which the
+  what players already have, and so are the element ids (`steinhud.armor`...; the minimap and the target keep theirs in the mods they moved to) under which the
   Loader keeps each element's place;
 - everything is drawn through the Loader API (`Render`), never with OpenGL directly, and looks right with both the
   Stein GFX renderer and the fixed-function fallback (`-Dsteinbridge.gfx=false`);

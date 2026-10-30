@@ -34,9 +34,7 @@ public final class HudConfig {
     public Effects effects = new Effects();
     public Compass direction = new Compass();
     public Inventory inventory = new Inventory();
-    public Target target = new Target();
     public Stats stats = new Stats();
-    public Minimap minimap = new Minimap();
     public TabConfig tab = new TabConfig();
 
     /**
@@ -220,68 +218,6 @@ public final class HudConfig {
         }
     }
 
-    /**
-     * Target: the last player you hit (in range and in time) or, without a recent hit, the one in
-     * your crosshair, with head, name, health, armor and held item, and each piece's durability.
-     */
-    public static final class Target extends Placement {
-        /** Without a recent hit, shows who is in the crosshair. */
-        public boolean aim = true;
-
-        /** Blocks: the crosshair's reach; farther than this the target leaves. */
-        public float range = 8.0F;
-
-        /** Seconds on screen after the last hit. */
-        public float seconds = 5.0F;
-
-        /**
-         * Seconds the current target holds the place: a hit on another player before that does not
-         * switch.
-         */
-        public float switchSeconds = 1.0F;
-
-        public boolean head = true;
-        public boolean name = true;
-        public boolean distance = true;
-
-        /** Health bar (with the lost part fading slowly). */
-        public boolean healthBar = true;
-
-        public boolean healthText = true;
-        public boolean armor = true;
-        public boolean held = true;
-
-        /** Durability bar over the icon, like in the inventory. */
-        public boolean durabilityBar = true;
-
-        /** value, percent or none: the durability under each piece. */
-        public String durability = "percent";
-
-        /** Entering, leaving and health changes animated. */
-        public boolean animation = true;
-
-        public Target() {
-            resetPosition();
-            showInChat = false;
-        }
-
-        @Override
-        void resetPosition() {
-            // Beside the crosshair, a little below: the fight happens there, and the eye need not
-            // leave the target.
-            anchorX = 1;
-            anchorY = 1;
-            x = 70;
-            y = 30;
-            scale = 1.0F;
-        }
-
-        @Override
-        Placement fresh() {
-            return new Target();
-        }
-    }
-
     /** Performance in a single block: FPS, 1% low, ping, CPU, GPU, RAM and CPS. */
     public static final class Stats extends Placement {
         /** 0 "FPS: 120", 1 "120 FPS". */
@@ -337,63 +273,6 @@ public final class HudConfig {
         }
     }
 
-    /**
-     * Minimap: the terrain from above (like Rei's Minimap) or radar only, with players, mobs and
-     * spawners.
-     */
-    public static final class Minimap extends Placement {
-        /** 0 detailed map, 1 simple map (less detail, outlines), 2 radar only. */
-        public int mode = 0;
-
-        /** 0 square, 1 round. */
-        public int shape = 0;
-
-        /** Side in GUI pixels: 64, 80, 96 or 128. */
-        public int size = 80;
-
-        /** Blocks per pixel: 0.5, 1, 2 or 4. */
-        public float zoom = 1.0F;
-
-        /** Turns with the player (facing up); without it, north is up. */
-        public boolean rotate = true;
-
-        /** Players on the map (always as a dot). */
-        public boolean players = true;
-
-        /** 0 monsters and animals, 1 monsters only, 2 animals only, 3 none. */
-        public int entities = 0;
-
-        /** Spawners nearby. */
-        public boolean spawners = true;
-
-        /** Relation colors on players: enemies, allies and my clan. */
-        public boolean combat = true;
-
-        public boolean coords = true;
-
-        /** In the Nether and underground, the floor of the player's level. */
-        public boolean caves = true;
-
-        public Minimap() {
-            resetPosition();
-            showInChat = true;
-        }
-
-        @Override
-        void resetPosition() {
-            anchorX = 2;
-            anchorY = 0;
-            x = -2;
-            y = 2;
-            scale = 1.0F;
-        }
-
-        @Override
-        Placement fresh() {
-            return new Minimap();
-        }
-    }
-
     /** A hand-edited file or one from an earlier version: missing fields go back to the default. */
     void repair() {
         if (armor == null) {
@@ -414,21 +293,11 @@ public final class HudConfig {
         if (inventory == null) {
             inventory = new Inventory();
         }
-        if (target == null) {
-            target = new Target();
-        }
-        if (target.durability == null) {
-            target.durability = "percent";
-        }
-        if (minimap == null) {
-            minimap = new Minimap();
-        }
         if (tab == null) {
             tab = new TabConfig();
         }
         tab.repair();
-        for (Placement p :
-                new Placement[] {armor, effects, direction, inventory, target, stats, minimap}) {
+        for (Placement p : new Placement[] {armor, effects, direction, inventory, stats}) {
             if (!(p.scale >= 0.25F && p.scale <= 4.0F)) {
                 p.scale = 1.0F;
             }

@@ -3,7 +3,8 @@
   "name": "HUD",
   "version": "0.1.16",
   "author": "X4vieer",
-  "description": "Customizable HUD: armor, effects, compass, FPS and 1% low, ping, CPS, CPU, GPU and system RAM, inventory and a minimap (map or radar). Move and resize everything on the HUD grid (Right Shift).",
+  "description": "Customizable HUD: armor, effects, compass, FPS and 1% low, ping, CPS, CPU, GPU and system RAM, and inventory. Move and resize everything on the HUD grid (Right Shift).",
   "entry": "dev.xavier.stein.hud.SteinHud",
-  "loader": "0.1.28"
+  "loader": "0.1.28",
+  "source": "https://stein-project.github.io/registry/mods/hud.json"
 }

@@ -113,16 +113,6 @@ final class TabPage {
                                     save.run();
                                 })
                         .advanced());
-        page.option(ServerLimits.note(ServerLimits.DISTANCE));
-        page.option(
-                Option.toggle(
-                                T.tr("tab.distance"),
-                                () -> t.distance,
-                                v -> {
-                                    t.distance = v;
-                                    save.run();
-                                })
-                        .advanced());
         page.option(
                 Option.cycle(
                                 T.tr("tab.columns"),
@@ -138,7 +128,6 @@ final class TabPage {
                     t.ping = d.ping;
                     t.heads = d.heads;
                     t.nameColor = d.nameColor;
-                    t.distance = d.distance;
                     t.columns = d.columns;
                     t.background = d.background;
                     t.rowBackground = d.rowBackground;
@@ -186,7 +175,6 @@ final class TabPage {
 
     private void order(Page page) {
         page.section(T.tr("tab.order"));
-        page.option(ServerLimits.note(ServerLimits.DISTANCE));
         page.option(
                 Option.cycle(
                         T.tr("tab.show"),
@@ -196,19 +184,6 @@ final class TabPage {
                             t.filter = i;
                             save.run();
                         }));
-        if (t.filter == TabEntries.FILTER_NEARBY) {
-            // The radius only applies to "Nearby": with another filter it is left out (the Panel
-            // rebuilds on the click).
-            page.option(
-                    Option.cycle(
-                            T.tr("tab.radius"),
-                            TabEntries.radiusNames(),
-                            () -> t.radius,
-                            i -> {
-                                t.radius = i;
-                                save.run();
-                            }));
-        }
         page.option(
                 Option.cycle(
                         T.tr("tab.sort"),
@@ -240,7 +215,6 @@ final class TabPage {
         page.restore(
                 () -> {
                     t.filter = d.filter;
-                    t.radius = d.radius;
                     t.sort = d.sort;
                     t.group = d.group;
                     t.limit = d.limit;
