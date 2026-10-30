@@ -77,12 +77,10 @@ final class TabLayout {
             String header,
             String footer,
             boolean note,
-            boolean distance,
             TabConfig c) {
         int pingW = (c.ping != 1 ? 12 : 0) + (c.ping != 0 ? Render.textWidth("999 ms") + 4 : 0);
-        int distW = distance ? Render.textWidth("999 m") + 6 : 0;
         TabLayout at = new TabLayout();
-        at.cellW = (c.heads ? HEAD + 2 : 0) + nameW + 6 + distW + scoreW + pingW;
+        at.cellW = (c.heads ? HEAD + 2 : 0) + nameW + 6 + scoreW + pingW;
         int size = lines.size();
         int n = Math.max(1, size);
         int fixed = COLUMNS[Math.max(0, Math.min(COLUMNS.length - 1, c.columns))];

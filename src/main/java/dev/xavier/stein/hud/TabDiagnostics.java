@@ -20,8 +20,8 @@ import dev.xavier.stein.loader.api.Log;
  *   <li>{@code -Dsteinhud.tabGroupAtSec=20,30,40}: at those seconds, the next grouping (none, by
  *       clan, by relation).
  *   <li>{@code -Dsteinhud.tabSetAtSec=S:filter=2,sort=1,group=0|S:reset|...}: at those seconds,
- *       several options at once (filter, sort, group, radius, limit, columns, headerFooter=0/1,
- *       own=0/1) or back to the defaults, to check combinations.
+ *       several options at once (filter, sort, group, limit, columns, headerFooter=0/1, own=0/1) or
+ *       back to the defaults, to check combinations.
  *   <li>{@code -Dsteinhud.tabSelfTestAtSec=N}: the self-test of every combination ({@link
  *       TabSelfTest}), with Tab held.
  * </ul>
@@ -106,7 +106,6 @@ final class TabDiagnostics {
                 case "filter" -> t.filter = v;
                 case "sort" -> t.sort = v;
                 case "group" -> t.group = v;
-                case "radius" -> t.radius = v;
                 case "limit" -> t.limit = v;
                 case "columns" -> t.columns = v;
                 case "headerFooter" -> t.headerFooter = v != 0;

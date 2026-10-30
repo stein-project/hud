@@ -26,11 +26,11 @@ import java.util.Set;
  * Tab list through <b>every</b> combination of its settings, on the server's real list, and checks
  * each one by itself.
  *
- * <p>Who gets in, order, groups and cap: filter x radius x sort x group x cap x prefix x suffix,
- * each combination built by the list and compared with a count made here another way (the filter
- * again, player by player, straight from the relations; the order checked pair by pair by the key;
- * each group once, with the right count and in the right order). The screen: {@link
- * TabLayoutSelfTest}. The Panel: {@link TabPanelSelfTest}.
+ * <p>Who gets in, order, groups and cap: filter x sort x group x cap x prefix x suffix, each
+ * combination built by the list and compared with a count made here another way (the filter again,
+ * player by player, straight from the relations; the order checked pair by pair by the key; each
+ * group once, with the right count and in the right order). The screen: {@link TabLayoutSelfTest}.
+ * The Panel: {@link TabPanelSelfTest}.
  *
  * <p>Everything runs in a single frame, on the game thread: no server packet changes the list in
  * the middle of the count. At the end, the player's configuration is back as it was. The result
@@ -49,7 +49,6 @@ final class TabSelfTest {
         String nick;
         String clan;
         int relation;
-        double distance = -1;
         int ping;
         String team;
         boolean spectator;
@@ -80,15 +79,15 @@ final class TabSelfTest {
                             + mine);
             int[] perFilter = new int[TabEntries.FILTERS.length];
             for (int filter = 0; filter < TabEntries.FILTERS.length; filter++) {
-                for (int radius = 0; radius < TabEntries.RADIUS.length; radius++) {
+                {
                     int expected = 0;
                     for (Ref r : refs.values()) {
-                        expected += passes(filter, radius, r) ? 1 : 0;
+                        expected += passes(filter, r) ? 1 : 0;
                     }
-                    if (radius == 0) {
+                    {
                         perFilter[filter] = expected;
                     }
-                    combinations(list, c, refs, mine, filter, radius, expected);
+                    combinations(list, c, refs, mine, filter, expected);
                 }
             }
             StringBuilder counts = new StringBuilder();
@@ -98,7 +97,7 @@ final class TabSelfTest {
                         .append(' ')
                         .append(perFilter[i]);
             }
-            log.info(TAG + "how many pass each filter (radius: everything loaded): " + counts);
+            log.info(TAG + "how many pass each filter: " + counts);
             new TabPanelSelfTest(tally, log).run(hud, c);
         } catch (Throwable t) {
             tally.fail("the self-test stopped with " + t);
@@ -128,7 +127,6 @@ final class TabSelfTest {
             Map<String, Ref> refs,
             String mine,
             int filter,
-            int radius,
             int expected) {
         for (int sort = 0; sort < TabEntries.SORTS.length; sort++) {
             for (int group = 0; group < TabEntries.GROUPS.length; group++) {
@@ -136,7 +134,6 @@ final class TabSelfTest {
                     for (int names = 0; names < 4; names++) {
                         c.reset();
                         c.filter = filter;
-                        c.radius = radius;
                         c.sort = sort;
                         c.group = group;
                         c.limit = limit;
@@ -166,27 +163,18 @@ final class TabSelfTest {
             r.ping = p.ping;
             r.team = p.team;
             r.spectator = p.spectator;
-            Object e = loaded.get(r.nick);
-            if (e != null && self != null) {
-                double dx = Entities.x(e, 1) - Entities.x(self, 1);
-                double dy = Entities.y(e, 1) - Entities.y(self, 1);
-                double dz = Entities.z(e, 1) - Entities.z(self, 1);
-                r.distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            }
             out.put(r.nick, r);
         }
         return out;
     }
 
     /** The filter, written again from what each option promises on the Panel. */
-    private static boolean passes(int filter, int radius, Ref r) {
-        int max = TabEntries.RADIUS[radius];
+    private static boolean passes(int filter, Ref r) {
         return switch (filter) {
             case 1 -> r.clan != null;
             case 2 -> r.relation == RelationLink.CLAN;
             case 3 -> r.relation == RelationLink.CLAN || r.relation == RelationLink.ALLY;
             case 4 -> r.relation == RelationLink.ENEMY;
-            case 5 -> r.distance >= 0 && (max == 0 || r.distance <= max);
             default -> true;
         };
     }
@@ -226,12 +214,6 @@ final class TabSelfTest {
                 }
             case 2:
                 return a.nick.compareToIgnoreCase(b.nick) <= 0;
-            case 3:
-                {
-                    double da = a.distance < 0 ? Double.MAX_VALUE : a.distance;
-                    double db = b.distance < 0 ? Double.MAX_VALUE : b.distance;
-                    return da <= db;
-                }
             default:
                 if (a.spectator != b.spectator) {
                     return !a.spectator;
@@ -249,8 +231,6 @@ final class TabSelfTest {
         String cfg =
                 "[filter "
                         + c.filter
-                        + " radius "
-                        + c.radius
                         + " sort "
                         + c.sort
                         + " group "
@@ -289,15 +269,13 @@ final class TabSelfTest {
             }
             tally.check(seen.add(l.nick), cfg + l.nick + " shows twice");
             tally.check(
-                    passes(c.filter, c.radius, r),
+                    passes(c.filter, r),
                     cfg
                             + l.nick
                             + " does not pass the filter (clan "
                             + r.clan
                             + ", relation "
                             + r.relation
-                            + ", distance "
-                            + r.distance
                             + ")");
             names(c, l, cfg);
         }
@@ -339,7 +317,7 @@ final class TabSelfTest {
             String cfg) {
         Map<String, Integer> clanRanks = new HashMap<>();
         for (Ref r : refs.values()) {
-            if (r.clan != null && passes(c.filter, c.radius, r)) {
+            if (r.clan != null && passes(c.filter, r)) {
                 int rank =
                         r.relation == RelationLink.CLAN
                                 ? 0

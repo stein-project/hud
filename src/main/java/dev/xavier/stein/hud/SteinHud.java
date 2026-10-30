@@ -36,8 +36,6 @@ public final class SteinHud implements SteinMod {
     private File configFile;
     private StatsBlock stats;
     private TabList tabList;
-    private Minimap minimap;
-    private TargetHud target;
     private TabDiagnostics diagnostics;
 
     /** This frame's Tab list request: the screen width (-1 without a request). */
@@ -65,13 +63,10 @@ public final class SteinHud implements SteinMod {
         return log;
     }
 
-    /** A new resource pack: the minimap takes its colors again. */
+    /** A new resource pack: the language, whose names the texts hold, may have changed. */
     @Override
     public void onModelsReloaded() {
         textEpoch++;
-        if (minimap != null) {
-            minimap.resourcesReloaded();
-        }
     }
 
     @Override
@@ -90,15 +85,6 @@ public final class SteinHud implements SteinMod {
     @Override
     public void onWindowItems(int windowId) {
         inventoryEpoch++;
-    }
-
-    /** A hit of yours on a player: the target element shows them. */
-    @Override
-    public boolean onAttackEntity(Object entity) {
-        if (target != null) {
-            target.hit(entity);
-        }
-        return false;
     }
 
     /** Every click the game handled in the world counts for the CPS. */
@@ -120,15 +106,22 @@ public final class SteinHud implements SteinMod {
         Hud.register(new Direction(config.direction, this));
         stats = new StatsBlock(config.stats, this);
         Hud.register(stats);
-        minimap = new Minimap(config.minimap, this);
-        Hud.register(minimap);
         Hud.register(new InventoryView(config.inventory, this));
-        target = new TargetHud(config.target, this);
-        Hud.register(target);
         tabList = new TabList(config.tab, log);
         diagnostics = new TabDiagnostics(this);
         applyInventoryEffects();
         log.info("started (" + configFile + ")");
+    }
+
+    /** What the HUD set on the game: the Loader takes its elements out, but not this. */
+    @Override
+    public void onSuspend() {
+        Game.setInventoryEffectsHidden(false);
+    }
+
+    @Override
+    public void onResume() {
+        applyInventoryEffects();
     }
 
     /** The inventory's effect list goes away when the effects element asks for it. */

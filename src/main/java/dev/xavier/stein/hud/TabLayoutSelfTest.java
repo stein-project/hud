@@ -16,8 +16,8 @@ import java.util.Set;
 
 /**
  * The screen part of the Tab list self-test ({@link TabSelfTest}): for each list built, columns x
- * header x ping x heads x distance x four screen sizes, and the list must fit, "+N" must add up and
- * fixed columns must be kept.
+ * header x ping x heads x four screen sizes, and the list must fit, "+N" must add up and fixed
+ * columns must be kept.
  */
 final class TabLayoutSelfTest {
 
@@ -49,13 +49,12 @@ final class TabLayoutSelfTest {
         for (int columns = 0; columns < TabLayout.COLUMN_NAMES.length; columns++) {
             for (int hf = 0; hf < 2; hf++) {
                 for (int ping = 0; ping < TabEntries.PING_MODES.length; ping++) {
-                    for (int look = 0; look < 4; look++) {
+                    for (int look = 0; look < 2; look++) {
                         for (int[] screen : SCREENS) {
                             v.columns = columns;
                             v.headerFooter = hf == 1;
                             v.ping = ping;
-                            v.heads = (look & 1) != 0;
-                            v.distance = (look & 2) != 0;
+                            v.heads = look != 0;
                             layout(
                                     v,
                                     out,
@@ -82,9 +81,7 @@ final class TabLayoutSelfTest {
             boolean note,
             String cfg) {
         layouts++;
-        TabLayout at =
-                TabLayout.of(
-                        out, nameW, 0, screen[0], screen[1], header, footer, note, v.distance, v);
+        TabLayout at = TabLayout.of(out, nameW, 0, screen[0], screen[1], header, footer, note, v);
         String where =
                 cfg
                         + "[screen "
@@ -99,8 +96,6 @@ final class TabLayoutSelfTest {
                         + v.ping
                         + " heads "
                         + v.heads
-                        + " distance "
-                        + v.distance
                         + "] ";
         int size = out.size();
         tally.check(

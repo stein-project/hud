@@ -44,6 +44,9 @@ final class HudConfigFile {
     /** The HUD's defaults (without a file, and what "Restore defaults" brings back). */
     static final String DEFAULTS = "/assets/steinhud/defaults.json";
 
+    /** The blocks of what left the HUD, for the mods that took it ({@link #keepMoved}). */
+    private static final String MOVED = "steinhud-moved.json";
+
     private HudConfigFile() {}
 
     /**
@@ -58,6 +61,7 @@ final class HudConfigFile {
                     new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)) {
                 JsonElement tree = new JsonParser().parse(r);
                 if (tree != null && tree.isJsonObject()) {
+                    keepMoved(tree.getAsJsonObject(), file, log);
                     HudConfig c = lenient(tree.getAsJsonObject(), HudConfig.class, "", log);
                     // Up to 0.1.1 the Tab list was always ours, with no way to choose. Whoever
                     // already had a configuration keeps it; the new default (the server's) is for
@@ -74,6 +78,31 @@ final class HudConfigFile {
             }
         }
         return defaults(log);
+    }
+
+    /**
+     * The minimap and the target left the HUD. This file is written whole from {@link HudConfig},
+     * so the first save would erase the player's choices for them, which the mods they moved to may
+     * only read much later: before that, their blocks go to a file of their own, once, which
+     * nothing writes again.
+     */
+    private static void keepMoved(JsonObject tree, File file, Log log) {
+        File moved = new File(file.getParentFile(), MOVED);
+        if (moved.exists() || !(tree.has("minimap") || tree.has("target"))) {
+            return;
+        }
+        JsonObject out = new JsonObject();
+        for (String key : new String[] {"minimap", "target"}) {
+            if (tree.has(key)) {
+                out.add(key, tree.get(key));
+            }
+        }
+        try (Writer w =
+                new OutputStreamWriter(new FileOutputStream(moved), StandardCharsets.UTF_8)) {
+            GSON.toJson(out, w);
+        } catch (IOException e) {
+            log.error("could not keep the minimap and target settings", e);
+        }
     }
 
     /**

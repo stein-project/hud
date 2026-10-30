@@ -28,16 +28,12 @@ import java.util.List;
  * nick.
  *
  * <p>Here all of that is an option, and the list can also be <b>filtered and grouped</b> ({@link
- * TabEntries}): only those with a clan, only allies or enemies, only those nearby, grouped by clan
- * or by relation, with each one's distance.
+ * TabEntries}): only those with a clan, only allies or enemies, grouped by clan or by relation.
  */
 final class TabList {
 
     private final TabConfig c;
     private final TabEntries entries;
-
-    /** The distance column this frame: the player's option, if the server allows it. */
-    private boolean showDistance;
 
     /** The drawing's result, written by the game font's callback. */
     private boolean drawn;
@@ -56,7 +52,7 @@ final class TabList {
      * filter that left nobody, the list is still ours, empty and saying why. It used to return
      * false in that case too, and the game drew its list, without filter, order or groups; that was
      * the "sometimes it sorts, sometimes not": my clan not read yet on joining or switching
-     * servers, or nobody nearby, and the whole list was the game's again.
+     * servers, and the whole list was the game's again.
      */
     boolean draw(int width, boolean objective) {
         if (Players.self() == null) {
@@ -77,8 +73,7 @@ final class TabList {
         // With a filter on, a row saying which one and how many were kept out of how many: without
         // it, a list that shrank looks like a broken list, and the filter itself is the
         // explanation.
-        int filter = entries.filter();
-        showDistance = c.distance && ServerLimits.allows(ServerLimits.DISTANCE);
+        int filter = c.filter;
         String note =
                 filter == 0
                         ? null
@@ -107,7 +102,6 @@ final class TabList {
                         header,
                         footer,
                         note != null,
-                        showDistance,
                         c);
         float scale = at.scale;
         int columns = at.columns;
@@ -237,11 +231,6 @@ final class TabList {
             String ms = l.ping + " ms";
             Render.text(ms, right - Render.textWidth(ms), y, pingColor(l.ping), true);
             right -= Render.textWidth(ms) + 4;
-        }
-        if (showDistance) {
-            String d = l.distance < 0 ? "--" : Math.round(l.distance) + " m";
-            Render.text("§7" + d, right - Render.textWidth(d), y, 0xA0A0A0, true);
-            right -= Render.textWidth(d) + 6;
         }
         if (objective) {
             String s = score(l);

@@ -50,20 +50,14 @@ public final class TabConfig {
      */
     public int limit = 2;
 
-    /** 0 team and name (like the game), 1 ping, 2 name, 3 distance. */
+    /** 0 team and name (like the game), 1 ping, 2 name. */
     public int sort = 0;
 
     /** Who gets in, in the order of TabEntries.FILTERS. */
     public int filter = 0;
 
-    /** Radius of the "nearby" filter, in the order of TabEntries.RADIUS (default 64 blocks). */
-    public int radius = 3;
-
     /** 0 no groups, 1 by clan, 2 by relation (my clan, allies, enemies, no clan). */
     public int group = 0;
-
-    /** Each one's distance, for whoever has a loaded entity. */
-    public boolean distance = false;
 
     /**
      * Columns, in the order of TabLayout.COLUMN_NAMES: 0 automatic, 1 to 3 are 2, 3 and 4 fixed.
@@ -101,9 +95,7 @@ public final class TabConfig {
         limit = d.limit;
         sort = d.sort;
         filter = d.filter;
-        radius = d.radius;
         group = d.group;
-        distance = d.distance;
         columns = d.columns;
         background = d.background;
         rowBackground = d.rowBackground;
@@ -132,12 +124,8 @@ public final class TabConfig {
                 + sort
                 + " filter="
                 + filter
-                + " radius="
-                + radius
                 + " group="
                 + group
-                + " distance="
-                + distance
                 + " columns="
                 + columns
                 + " background="
@@ -156,7 +144,6 @@ public final class TabConfig {
         limit = in(limit, TabEntries.LIMITS.length, d.limit);
         sort = in(sort, TabEntries.SORTS.length, d.sort);
         filter = in(filter, TabEntries.FILTERS.length, d.filter);
-        radius = in(radius, TabEntries.RADIUS.length, d.radius);
         group = in(group, TabEntries.GROUPS.length, d.group);
         columns = in(columns, TabLayout.COLUMN_NAMES.length, d.columns);
     }
