@@ -93,3 +93,34 @@ steinhud.tab.noLimit=No limit
 steinhud.tab.blocks=%d blocks
 steinhud.tab.nobody=Nobody
 
+
+# Crosshair
+steinhud.crosshair.title=Crosshair
+steinhud.crosshair.enabled=Custom crosshair
+steinhud.crosshair.edit=Edit the crosshair
+steinhud.crosshair.invert=Invert like the game
+steinhud.crosshair.outline=Outline
+steinhud.crosshair.scale=Size
+steinhud.crosshair.scale.gui=Interface
+steinhud.crosshair.scale.px=%s px
+steinhud.crosshair.thirdPerson=Hide in third person
+steinhud.crosshair.screens=Hide with a screen open
+steinhud.crosshair.editor=Crosshair editor
+steinhud.crosshair.size=Grid
+steinhud.crosshair.mirror=Mirror
+steinhud.crosshair.presets=Presets
+steinhud.crosshair.preset.dot=Dot
+steinhud.crosshair.preset.cross=Cross
+steinhud.crosshair.preset.gap=Gap
+steinhud.crosshair.preset.circle=Circle
+steinhud.crosshair.clear=Clear
+steinhud.crosshair.color=Color
+steinhud.crosshair.fill=Crosshair
+steinhud.crosshair.red=Red
+steinhud.crosshair.green=Green
+steinhud.crosshair.blue=Blue
+steinhud.crosshair.opacity=Opacity
+steinhud.crosshair.favorites=Favorites
+steinhud.crosshair.save=Save
+steinhud.crosshair.favorites.empty=Save a pattern to keep it here
+steinhud.crosshair.favorites.hint=Click loads, right click removes

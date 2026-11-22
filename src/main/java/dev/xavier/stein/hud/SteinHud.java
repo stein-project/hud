@@ -8,6 +8,7 @@
 
 package dev.xavier.stein.hud;
 
+import dev.xavier.stein.loader.api.Entities;
 import dev.xavier.stein.loader.api.Game;
 import dev.xavier.stein.loader.api.Hud;
 import dev.xavier.stein.loader.api.Keys;
@@ -15,6 +16,7 @@ import dev.xavier.stein.loader.api.Log;
 import dev.xavier.stein.loader.api.ModContext;
 import dev.xavier.stein.loader.api.Page;
 import dev.xavier.stein.loader.api.Render;
+import dev.xavier.stein.loader.api.Screens;
 import dev.xavier.stein.loader.api.SteinMod;
 
 import java.io.File;
@@ -37,6 +39,7 @@ public final class SteinHud implements SteinMod {
     private StatsBlock stats;
     private TabList tabList;
     private TabDiagnostics diagnostics;
+    private final CrosshairDrawer crosshair = new CrosshairDrawer(this);
 
     /** This frame's Tab list request: the screen width (-1 without a request). */
     private int pendingWidth = -1;
@@ -59,6 +62,16 @@ public final class SteinHud implements SteinMod {
 
     private int ticks;
 
+    /**
+     * {@code -Dsteinhud.debugCrosshairEditorAtSec=N}: opens the crosshair editor N seconds after
+     * the game started, once a world is in (a screenshot of the editor with no clicking).
+     */
+    private static final long DEBUG_EDITOR_AT =
+            Long.getLong("steinhud.debugCrosshairEditorAtSec", -1L);
+
+    private final long startNanos = System.nanoTime();
+    private boolean debugEditorOpened;
+
     Log log() {
         return log;
     }
@@ -74,6 +87,13 @@ public final class SteinHud implements SteinMod {
         inventoryEpoch++;
         if (++ticks % 20 == 0) {
             textEpoch++;
+        }
+        if (DEBUG_EDITOR_AT >= 0
+                && !debugEditorOpened
+                && Entities.self() != null
+                && System.nanoTime() - startNanos >= DEBUG_EDITOR_AT * 1_000_000_000L) {
+            debugEditorOpened = true;
+            Screens.open(new CrosshairEditor(this, null));
         }
     }
 
@@ -117,6 +137,8 @@ public final class SteinHud implements SteinMod {
     @Override
     public void onSuspend() {
         Game.setInventoryEffectsHidden(false);
+        // The game's crosshair comes back by itself once onOverlay stops asking for it.
+        crosshair.release();
     }
 
     @Override
@@ -128,6 +150,22 @@ public final class SteinHud implements SteinMod {
     void applyInventoryEffects() {
         Game.setInventoryEffectsHidden(
                 Hud.isEnabled("steinhud.effects") && config.effects.hideInventoryList);
+    }
+
+    /** The crosshair's settings changed: saved, and its drawing built again. */
+    void crosshairChanged() {
+        crosshair.invalidate();
+        save();
+    }
+
+    CrosshairDrawer crosshair() {
+        return crosshair;
+    }
+
+    /** The custom crosshair, in the middle of the screen (with it off, the game's stays). */
+    @Override
+    public void onOverlay(float partialTicks) {
+        crosshair.frame();
     }
 
     void save() {
@@ -172,9 +210,14 @@ public final class SteinHud implements SteinMod {
         Render.gameTabList(width);
     }
 
-    /** The HUD page on the Panel: the Tab list (the rest is per element, on the Screen page). */
+    /**
+     * The HUD page on the Panel: the crosshair and the Tab list (the rest is per element, on the
+     * Screen page).
+     */
     @Override
     public void onPage(Page page) {
+        page.icon("list");
+        new CrosshairPage(this).build(page);
         new TabPage(config.tab, this::save).build(page);
     }
 

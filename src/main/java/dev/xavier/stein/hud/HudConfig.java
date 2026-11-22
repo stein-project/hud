@@ -8,6 +8,9 @@
 
 package dev.xavier.stein.hud;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * The HUD's settings, {@code config/steinhud.json} in the game folder (read and written by {@link
  * HudConfigFile}). The field names, here and in the nested classes, are the JSON keys players
@@ -36,6 +39,7 @@ public final class HudConfig {
     public Inventory inventory = new Inventory();
     public Stats stats = new Stats();
     public TabConfig tab = new TabConfig();
+    public Crosshair crosshair = new Crosshair();
 
     /**
      * Place and common options of an element. Place, scale and enabled now belong to the Loader's
@@ -273,6 +277,71 @@ public final class HudConfig {
         }
     }
 
+    /**
+     * The custom crosshair, drawn in place of the game's (see {@link CrosshairDrawer}). Off by
+     * default; once on, every option starts at what the game does (white, inverted like the game's,
+     * the game's size and place, shown in third person and under screens).
+     */
+    public static final class Crosshair {
+        public boolean enabled = false;
+
+        /** The painted cells, as {@link CrosshairPattern#encode} writes them. */
+        public String pattern = CrosshairPattern.preset(CrosshairPattern.CROSS, 15).encode();
+
+        /** ARGB; the alpha is the opacity. */
+        public int color = 0xFFFFFFFF;
+
+        /** A one-cell edge around the painted cells. */
+        public boolean outline = false;
+
+        public int outlineColor = 0xFF000000;
+
+        /** Inverts what is behind, as the game's crosshair does. */
+        public boolean invert = true;
+
+        /** Screen pixels per cell; 0 follows the interface scale (one GUI pixel per cell). */
+        public int scale = 0;
+
+        public boolean hideThirdPerson = false;
+
+        /** Hidden while any screen is open (the game keeps its crosshair under the screens). */
+        public boolean hideInScreens = false;
+
+        /** Saved patterns, in the same format as {@link #pattern}. */
+        public List<String> favorites = new ArrayList<>();
+
+        /** The editor's mirrors: what is painted on one side is painted on the other too. */
+        public boolean mirrorX = true;
+
+        public boolean mirrorY = true;
+
+        /** Everything back to {@code d} but whether it is on and the favorites. */
+        void restoreLook(Crosshair d) {
+            pattern = d.pattern;
+            color = d.color;
+            outline = d.outline;
+            outlineColor = d.outlineColor;
+            invert = d.invert;
+            scale = d.scale;
+            hideThirdPerson = d.hideThirdPerson;
+            hideInScreens = d.hideInScreens;
+            mirrorX = d.mirrorX;
+            mirrorY = d.mirrorY;
+        }
+
+        void repair() {
+            pattern = CrosshairPattern.decode(pattern).encode();
+            if (favorites == null) {
+                favorites = new ArrayList<>();
+            }
+            favorites.removeIf(f -> f == null || !CrosshairPattern.valid(f));
+            while (favorites.size() > CrosshairPattern.MAX_FAVORITES) {
+                favorites.remove(favorites.size() - 1);
+            }
+            scale = Math.max(0, Math.min(CrosshairPattern.MAX_SCALE, scale));
+        }
+    }
+
     /** A hand-edited file or one from an earlier version: missing fields go back to the default. */
     void repair() {
         if (armor == null) {
@@ -297,6 +366,10 @@ public final class HudConfig {
             tab = new TabConfig();
         }
         tab.repair();
+        if (crosshair == null) {
+            crosshair = new Crosshair();
+        }
+        crosshair.repair();
         for (Placement p : new Placement[] {armor, effects, direction, inventory, stats}) {
             if (!(p.scale >= 0.25F && p.scale <= 4.0F)) {
                 p.scale = 1.0F;

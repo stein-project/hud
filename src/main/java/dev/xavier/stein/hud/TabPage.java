@@ -28,7 +28,8 @@ final class TabPage {
     }
 
     void build(Page page) {
-        page.title(T.tr("tab.title")).icon("list");
+        // A section of the HUD page (the crosshair's comes before it), no longer the page itself.
+        page.section(T.tr("tab.title"));
 
         // First, who draws the list. The server's shows exactly what it sends (header, footer,
         // order) and none of our options apply, so the rest of the page is left out (the Panel

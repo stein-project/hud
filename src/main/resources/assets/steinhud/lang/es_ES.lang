@@ -93,3 +93,34 @@ steinhud.tab.noLimit=Sin límite
 steinhud.tab.blocks=%d bloques
 steinhud.tab.nobody=Nadie
 
+
+# Mira
+steinhud.crosshair.title=Mira
+steinhud.crosshair.enabled=Mira personalizada
+steinhud.crosshair.edit=Editar la mira
+steinhud.crosshair.invert=Invertir como el juego
+steinhud.crosshair.outline=Contorno
+steinhud.crosshair.scale=Tamaño
+steinhud.crosshair.scale.gui=Interfaz
+steinhud.crosshair.scale.px=%s px
+steinhud.crosshair.thirdPerson=Ocultar en tercera persona
+steinhud.crosshair.screens=Ocultar con una pantalla abierta
+steinhud.crosshair.editor=Editor de mira
+steinhud.crosshair.size=Cuadrícula
+steinhud.crosshair.mirror=Espejo
+steinhud.crosshair.presets=Prediseñadas
+steinhud.crosshair.preset.dot=Punto
+steinhud.crosshair.preset.cross=Cruz
+steinhud.crosshair.preset.gap=Hueco
+steinhud.crosshair.preset.circle=Círculo
+steinhud.crosshair.clear=Borrar
+steinhud.crosshair.color=Color
+steinhud.crosshair.fill=Mira
+steinhud.crosshair.red=Rojo
+steinhud.crosshair.green=Verde
+steinhud.crosshair.blue=Azul
+steinhud.crosshair.opacity=Opacidad
+steinhud.crosshair.favorites=Favoritas
+steinhud.crosshair.save=Guardar
+steinhud.crosshair.favorites.empty=Guarda un diseño para tenerlo aquí
+steinhud.crosshair.favorites.hint=Clic carga, clic derecho quita
